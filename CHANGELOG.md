@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.2.0 — 2026-09-16
+
+Smart installer: the installer now **detects and auto-installs** every system
+dependency instead of failing when something is missing.
+
+- **New `scripts/deps.sh`** — dependency resolver with three phases:
+  1. *Audit*: detects the OS, package manager (apt, dnf, yum, zypper, pacman,
+     apk) and every tool the theme needs (PHP CLI, python3, Node.js, yarn,
+     curl/tar/gzip, mysqldump), then prints a per-tool status plan.
+  2. *Resolve*: installs whatever is missing — Node.js via the official
+     NodeSource repositories (configurable: `AURORA_NODE_MAJOR`, default 22),
+     yarn via corepack/npm, modern PHP via ppa:ondrej/php / packages.sury.org
+     on legacy Debian/Ubuntu, plus the DB client for automatic backups.
+  3. *Verify*: re-checks everything afterward and only fails with exact,
+     distro-specific manual instructions when auto-install truly cannot help.
+- **Version awareness**: existing Node.js is kept when usable
+  (`AURORA_NODE_MIN_MAJOR=16` hard floor, 22+ recommended); PHP < 8.1 is never
+  auto-replaced on a live panel host (clear manual-upgrade guidance instead).
+- **`--no-deps` / `AURORA_DEPS_MODE=off`**: restores the legacy strict
+  behaviour (fail fast with manual hints) — nothing changes for managed/CI
+  environments that forbid system mutations.
+- **`AURORA_DEPS_DRY_RUN=1`**: prints the audit + install plan without
+  changing the system.
+- **Pipe-safe bootstrap**: even `curl | bash` on barebones images now
+  self-installs curl/wget/tar/gzip before downloading the theme package.
+- **Smarter frontend build**: `yarn build:production` automatically retries
+  once with `NODE_OPTIONS=--openssl-legacy-provider` when the panel's webpack
+  toolchain predates OpenSSL 3 (Node 17+) — the most common build failure.
+- **Interactive safety**: when run on a TTY without `--yes`, the planned
+  package installs are confirmed once (`[Y/n]`); piped/non-interactive runs
+  stay fully automatic.
+- `update.sh` gained `--no-deps` and passes it through to the installer.
+- Version bump to `1.2.0` across codebase (`version`, `AuroraThemeService::VERSION`,
+  `config/aurora.php`, `admin.blade.php`, `scripts/lib.sh`).
+
 ## 1.1.0 — 2026-09-16
 
 Added official support for Pterodactyl Panel 1.15.x alongside 1.14.x.

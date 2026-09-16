@@ -8,7 +8,11 @@
 #
 #   Or from a clone:
 #   bash install.sh [--panel-dir /var/www/pterodactyl] [--force] [--skip-build]
-#                   [--no-maintenance] [--yes] [--verbose]
+#                   [--no-deps] [--no-maintenance] [--yes] [--verbose]
+#
+# Smart installer: everything the theme needs (PHP CLI, python3, Node.js,
+# yarn, core tools, mysqldump) is auto-detected and auto-installed when
+# missing — use --no-deps / AURORA_DEPS_MODE=off for legacy strict checks.
 #
 # Exit codes: 0 success, 1 failure (with rollback attempted where possible).
 #
@@ -36,6 +40,45 @@ elif [ -f "$(pwd)/scripts/lib.sh" ] && [ -f "$(pwd)/version" ]; then
     AURORA_SOURCE_DIR="$(pwd)"
 else
     # Piped execution: download the theme package from GitHub.
+    # First make sure the core transport tools exist — this runs BEFORE the
+    # shared libraries are available, so it keeps its own tiny installer.
+    _bootstrap_missing=""
+    command -v tar  >/dev/null 2>&1 || _bootstrap_missing="$_bootstrap_missing tar"
+    command -v gzip >/dev/null 2>&1 || _bootstrap_missing="$_bootstrap_missing gzip"
+    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+        _bootstrap_missing="$_bootstrap_missing curl"
+    fi
+    if [ -n "${_bootstrap_missing# }" ]; then
+        echo "[INFO] Smart installer: bootstrapping core tools:${_bootstrap_missing}"
+        _bootstrap_mgr=""
+        for _m in apt-get dnf yum zypper pacman apk; do
+            if command -v "$_m" >/dev/null 2>&1; then _bootstrap_mgr="$_m"; break; fi
+        done
+        if [ -z "$_bootstrap_mgr" ]; then
+            echo "[ERROR] Required tools are missing (${_bootstrap_missing# }) and no supported package manager was found."
+            echo "        Install them manually, then retry."
+            exit 1
+        fi
+        _bootstrap_sudo=""
+        if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then _bootstrap_sudo="sudo"; fi
+        # ca-certificates is pulled in too: minimal images lack HTTPS roots.
+        case "$_bootstrap_mgr" in
+            apt-get) $_bootstrap_sudo apt-get update -qq && $_bootstrap_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ca-certificates $_bootstrap_missing ;;
+            dnf)     $_bootstrap_sudo dnf install -y -q ca-certificates $_bootstrap_missing ;;
+            yum)     $_bootstrap_sudo yum install -y -q ca-certificates $_bootstrap_missing ;;
+            zypper)  $_bootstrap_sudo zypper --non-interactive install --no-recommends ca-certificates $_bootstrap_missing ;;
+            pacman)  $_bootstrap_sudo pacman -Sy --needed --noconfirm ca-certificates $_bootstrap_missing ;;
+            apk)     $_bootstrap_sudo apk add ca-certificates $_bootstrap_missing ;;
+        esac
+        for _c in tar gzip; do
+            command -v "$_c" >/dev/null 2>&1 || { echo "[ERROR] '$_c' is still missing after the bootstrap attempt."; exit 1; }
+        done
+        if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+            echo "[ERROR] curl/wget is still missing after the bootstrap attempt."
+            exit 1
+        fi
+        echo "[OK] Core tools ready."
+    fi
     echo "[INFO] No local theme source found — downloading Aurora Theme (${AURORA_REPO}@${AURORA_REF})..."
     _tmp="$(mktemp -d)"
     _tarball="$_tmp/aurora.tar.gz"
@@ -61,6 +104,24 @@ fi
 . "$AURORA_SOURCE_DIR/scripts/lib.sh"
 # shellcheck disable=SC1091
 . "$AURORA_SOURCE_DIR/scripts/manifest.sh"
+# Smart dependency resolver. Fall back to the legacy strict checks when the
+# active package predates scripts/deps.sh (e.g. piping the newest install.sh
+# against an older ref via AURORA_REF).
+if [ -f "$AURORA_SOURCE_DIR/scripts/deps.sh" ]; then
+    # shellcheck disable=SC1091
+    . "$AURORA_SOURCE_DIR/scripts/deps.sh"
+else
+    aurora_ensure_dependencies() {
+        aurora_require_cmd php "Install PHP 8.2+ (the same binary the panel uses) and retry."
+        aurora_require_cmd python3 "Install python3 (used for safe surgical file patching) and retry."
+        if [ -z "${SKIP_BUILD:-}" ]; then
+            aurora_require_cmd node "Install Node.js 22+ (see panel BUILDING.md) or re-run with --skip-build."
+            if ! command -v yarn >/dev/null 2>&1 && ! command -v npm >/dev/null 2>&1; then
+                aurora_fail "Neither yarn nor npm was found. Install yarn (recommended) or re-run with --skip-build."
+            fi
+        fi
+    }
+fi
 
 AURORA_THEME_VERSION="$(tr -d '[:space:]' < "$AURORA_SOURCE_DIR/version")"
 
@@ -70,6 +131,7 @@ AURORA_THEME_VERSION="$(tr -d '[:space:]' < "$AURORA_SOURCE_DIR/version")"
 PANEL_DIR="${PANEL_DIR:-}"
 AURORA_FORCE="${AURORA_FORCE:-}"
 SKIP_BUILD="${AURORA_SKIP_BUILD:-}"
+AURORA_DEPS_MODE="${AURORA_DEPS_MODE:-auto}"
 NO_MAINTENANCE=""
 ASSUME_YES=""
 AURORA_VERBOSE="${AURORA_VERBOSE:-}"
@@ -80,26 +142,35 @@ while [ $# -gt 0 ]; do
         --panel-dir=*) PANEL_DIR="${1#--panel-dir=}"; shift ;;
         --force|-f) AURORA_FORCE=1; shift ;;
         --skip-build) SKIP_BUILD=1; shift ;;
+        --no-deps) AURORA_DEPS_MODE=off; shift ;;
         --no-maintenance) NO_MAINTENANCE=1; shift ;;
         --yes|-y) ASSUME_YES=1; shift ;;
         --verbose|-v) AURORA_VERBOSE=1; shift ;;
         --help|-h)
-            sed -n '2,20p' "$AURORA_SOURCE_DIR/install.sh"
+            sed -n '2,24p' "$AURORA_SOURCE_DIR/install.sh"
             echo ""
             echo "Options:"
             echo "  --panel-dir PATH   Path to the Pterodactyl panel (default: auto-detect)"
             echo "  --force            Bypass version/support checks"
             echo "  --skip-build       Do not run yarn install / frontend build"
+            echo "  --no-deps          Do NOT auto-install missing system dependencies"
+            echo "                     (legacy behaviour: fail with manual install hints)"
             echo "  --no-maintenance   Do not enable maintenance mode during install"
-            echo "  --yes              Assume yes for prompts"
+            echo "  --yes              Assume yes for prompts (incl. dependency installs)"
             echo "  --verbose          Show full command output"
+            echo ""
+            echo "Dependency auto-install env knobs:"
+            echo "  AURORA_DEPS_MODE=auto|off        Same as (not) passing --no-deps"
+            echo "  AURORA_NODE_MAJOR=22             Node line to install when missing"
+            echo "  AURORA_NODE_MIN_MAJOR=16         Oldest acceptable existing Node"
+            echo "  AURORA_DEPS_DRY_RUN=1            Audit + report only, install nothing"
             exit 0
             ;;
         *) aurora_fail "Unknown option: $1 (see --help)" ;;
     esac
 done
 
-export AURORA_FORCE AURORA_VERBOSE
+export AURORA_FORCE AURORA_VERBOSE AURORA_DEPS_MODE
 
 echo ""
 aurora_step "Aurora Theme v${AURORA_THEME_VERSION} — installer"
@@ -121,14 +192,11 @@ PANEL_VERSION="$(aurora_detect_panel_version "$PANEL_DIR_RESOLVED")"
 aurora_info "Panel version: $PANEL_VERSION (supported: $(aurora_format_supported_panels))"
 aurora_check_supported "$PANEL_VERSION" || exit 1
 
-aurora_require_cmd php "Install PHP 8.2+ (the same binary the panel uses) and retry."
-aurora_require_cmd python3 "Install python3 (used for safe surgical file patching) and retry."
-if [ -z "$SKIP_BUILD" ]; then
-    aurora_require_cmd node "Install Node.js 22+ (see panel BUILDING.md) or re-run with --skip-build."
-    if ! command -v yarn >/dev/null 2>&1 && ! command -v npm >/dev/null 2>&1; then
-        aurora_fail "Neither yarn nor npm was found. Install yarn (recommended) or re-run with --skip-build."
-    fi
-fi
+# Smart dependency resolution: audit everything the theme needs (PHP CLI,
+# python3, Node.js, yarn, core tools, mysqldump), auto-install whatever is
+# missing via the host package manager / NodeSource, then re-verify.
+# --no-deps (AURORA_DEPS_MODE=off) restores the legacy fail-fast behaviour.
+aurora_ensure_dependencies
 
 WEB_USER="$(aurora_detect_web_user)"
 WEB_GROUP="$(aurora_detect_web_group "$WEB_USER")"
@@ -271,6 +339,36 @@ aurora_ok "Theme files installed"
 # ---------------------------------------------------------------------------
 # 14. Frontend dependencies + build
 # ---------------------------------------------------------------------------
+# Run a frontend build command; automatically retry once with the OpenSSL
+# legacy provider when the panel's webpack toolchain predates OpenSSL 3
+# (Node 17+ default). This is the most common build failure on modern
+# distros, so the installer works around it instead of dying.
+aurora_build_cmd() {
+    local desc="$1" build_cmd="$2"
+    if [ -n "${AURORA_VERBOSE:-}" ]; then
+        aurora_info "\$ $build_cmd  (${desc})"
+    fi
+    local out
+    if ! out="$(cd "$PANEL_DIR_RESOLVED" && bash -c "$build_cmd" 2>&1)"; then
+        if printf '%s' "$out" | grep -qiE 'ERR_OSSL|error:0308010C|03000086|digital envelope routines'; then
+            aurora_warn "${desc} hit the OpenSSL 3 / legacy webpack issue — retrying with NODE_OPTIONS=--openssl-legacy-provider"
+            if ! out="$(cd "$PANEL_DIR_RESOLVED" && bash -c "NODE_OPTIONS=--openssl-legacy-provider $build_cmd" 2>&1)"; then
+                aurora_error "Command failed (${desc}), retry included:"
+                printf '%s\n' "$out" | tail -n 40
+                return 1
+            fi
+        else
+            aurora_error "Command failed (${desc}):"
+            printf '%s\n' "$out" | tail -n 40
+            return 1
+        fi
+    fi
+    if [ -n "${AURORA_VERBOSE:-}" ]; then
+        printf '%s\n' "$out" | tail -n 20
+    fi
+    return 0
+}
+
 aurora_step "[8/9] Building frontend"
 if [ -n "$SKIP_BUILD" ]; then
     aurora_warn "Skipping frontend build (--skip-build). You MUST run the build manually:"
@@ -280,11 +378,11 @@ else
     command -v yarn >/dev/null 2>&1 || PKG_MANAGER="npm"
     aurora_info "Using package manager: $PKG_MANAGER"
     if [ "$PKG_MANAGER" = "yarn" ]; then
-        aurora_run "yarn install" bash -c "cd \"$PANEL_DIR_RESOLVED\" && yarn install --network-timeout 300000"
-        aurora_run "yarn build:production" bash -c "cd \"$PANEL_DIR_RESOLVED\" && yarn build:production"
+        aurora_build_cmd "yarn install" "yarn install --network-timeout 300000"
+        aurora_build_cmd "yarn build:production" "yarn build:production"
     else
-        aurora_run "npm install" bash -c "cd \"$PANEL_DIR_RESOLVED\" && npm install --no-audit --no-fund"
-        aurora_run "npm build" bash -c "cd \"$PANEL_DIR_RESOLVED\" && npx cross-env NODE_ENV=production webpack --mode production"
+        aurora_build_cmd "npm install" "npm install --no-audit --no-fund"
+        aurora_build_cmd "webpack production build" "npx cross-env NODE_ENV=production webpack --mode production"
     fi
     if [ ! -f "$PANEL_DIR_RESOLVED/public/assets/manifest.json" ]; then
         aurora_fail "Frontend build did not produce public/assets/manifest.json. See the build output above."

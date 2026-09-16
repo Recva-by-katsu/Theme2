@@ -5,7 +5,7 @@
 #
 # shellcheck disable=SC2034
 
-AURORA_LIB_VERSION="1.1.0"
+AURORA_LIB_VERSION="1.2.0"
 
 # ---------------------------------------------------------------------------
 # Logging helpers — [INFO] / [OK] / [WARN] / [ERROR]

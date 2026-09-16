@@ -15,7 +15,7 @@ typography, login page, presets, live preview) backed by the database.
   uninstaller.
 
 > Target: **Pterodactyl Panel 1.14.x & 1.15.x** (verified against 1.14.1 and 1.15.x).
-> Theme version: **1.1.0**
+> Theme version: **1.2.0**
 
 ---
 
@@ -71,10 +71,14 @@ typography, login page, presets, live preview) backed by the database.
 
 - Pterodactyl Panel **1.14.x or 1.15.x** (installer verifies; `--force` overrides)
 - Root access on the panel host
-- PHP 8.2+ (same binary the panel uses), `python3`
-- Node.js 22+ and `yarn` (for the frontend build; or `--skip-build`)
-- `curl` or `wget`, `tar`, `gzip`
-- `mysqldump` recommended (automatic database backup; skipped with a warning if absent)
+- **Everything else is auto-detected and auto-installed** by the smart
+  installer: PHP CLI 8.2+, `python3`, Node.js 22+ (via NodeSource), `yarn`
+  (via corepack/npm), `curl`/`tar`/`gzip`, and the MariaDB/MySQL client for
+  automatic database backups.
+- Supported package managers for auto-install: `apt`, `dnf`, `yum`, `zypper`,
+  `pacman`, `apk`. Prefer manual control? Pass `--no-deps` (or
+  `AURORA_DEPS_MODE=off`) to get the legacy behaviour — the installer then
+  only verifies and reports exactly what to install.
 
 ---
 
@@ -104,21 +108,32 @@ Useful options:
 bash install.sh --panel-dir /var/www/pterodactyl --yes --verbose
 bash install.sh --force            # bypass version/support checks (risky)
 bash install.sh --skip-build       # skip yarn install + webpack build
+bash install.sh --no-deps          # verify-only dependencies (no auto-install)
 bash install.sh --no-maintenance   # do not enable maintenance mode
 AURORA_REPO=MyOrg/MyFork AURORA_REF=dev bash install.sh   # install a fork/ref
+
+# Smart dependency resolver knobs:
+AURORA_NODE_MAJOR=22 bash install.sh        # Node line to install when missing
+AURORA_DEPS_DRY_RUN=1 bash install.sh       # audit + report only, install nothing
 ```
 
 What the installer does:
 
 1. Detects OS, verifies root, locates the panel (`--panel-dir` or auto-detect)
 2. Detects the panel version and checks 1.14.x / 1.15.x support
-3. Verifies dependencies and patch anchors **before touching anything**
-4. Backs up every modified file + compiled assets + database dump to
+3. **Smart dependency resolution**: audits PHP CLI, python3, Node.js, yarn,
+   core tools and mysqldump, then auto-installs whatever is missing (apt /
+   dnf / yum / zypper / pacman / apk, NodeSource for Node.js, corepack for
+   yarn, ondrej/sury PHP repos on legacy Debian/Ubuntu) and re-verifies —
+   no more "command not found" install failures
+4. Verifies patch anchors **before touching anything**, then backs up every
+   modified file + compiled assets + database dump to
    `/var/backups/aurora-theme/<timestamp>/`
 5. Enables maintenance mode, installs backend/frontend/admin files
 6. Applies small marked patches (routes, theme provider, admin stats)
 7. Runs migrations (`aurora_theme_settings` table + defaults)
-8. Builds the frontend (`yarn install` + `yarn build:production`)
+8. Builds the frontend (`yarn install` + `yarn build:production`), with an
+   automatic OpenSSL-legacy-provider retry for older webpack toolchains
 9. Clears caches, fixes ownership (never 777), disables maintenance mode
 10. Verifies routes, files and config — and rolls back on failure
 
@@ -210,6 +225,7 @@ Public (unauthenticated, presentation-only) config: `GET /aurora/theme.json`
 ├── config/theme.defaults.json              # canonical default tokens
 ├── scripts/
 │   ├── lib.sh            # logging, detection, backup, permissions
+│   ├── deps.sh           # smart dependency resolver (auto-install anything missing)
 │   ├── manifest.sh       # single source of truth for managed files
 │   └── apply-patches.py  # surgical, reversible core patches
 ├── backend/
@@ -243,8 +259,14 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full technical breakdow
 (another theme/modification). Restore stock files or re-run with `--force`.
 
 **Build fails (`yarn build:production`)** — ensure Node 22+ and enough RAM
-(≥2 GB recommended). Re-run; the installer reuses backups and is idempotent.
+(≥2 GB recommended; the installer auto-installs Node unless `--no-deps` was
+used). Re-run; the installer reuses backups and is idempotent.
 You can also build manually: `cd /var/www/pterodactyl && yarn install && yarn build:production`.
+
+**Dependency auto-install fails / is unwanted** — the resolver prints the exact
+manual commands for your distro (apt/dnf/yum/...). Run them, or preview what
+*would* be installed with `AURORA_DEPS_DRY_RUN=1 bash install.sh`. To forbid
+any system changes and keep the old check-only behaviour, use `--no-deps`.
 
 **Pages look unstyled after install** — hard-refresh (Ctrl+Shift+R); the bundle
 filename changes on rebuild but aggressive caching/proxies may hold the old one.

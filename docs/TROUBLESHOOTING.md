@@ -2,6 +2,43 @@
 
 ## Installer
 
+### Dependencies (smart auto-installer)
+
+Since 1.2.0 the installer resolves missing system packages itself
+(PHP CLI, python3, Node.js, yarn, curl/tar/gzip, DB client) instead of
+failing with "command not found".
+
+**Preview what would be installed (no changes):**
+```bash
+AURORA_DEPS_DRY_RUN=1 bash install.sh --panel-dir /var/www/pterodactyl
+```
+
+**Disable auto-install entirely (legacy strict checks):**
+```bash
+bash install.sh --no-deps        # or AURORA_DEPS_MODE=off
+```
+The installer then only verifies and fails with manual-install hints, exactly
+like versions < 1.2.0.
+
+**`No supported package manager found`** — your system lacks
+apt/dnf/yum/zypper/pacman/apk. Install the tools manually (the error message
+lists them), then re-run.
+
+**Node.js install failed** — NodeSource couldn't be used (offline host,
+unsupported distro, proxy). Install Node 22+ manually
+(`https://nodejs.org`, distro packages, or `nvm`), or re-run with
+`--skip-build` and build the frontend yourself. Override the Node line with
+`AURORA_NODE_MAJOR=22` (default) if you need a different one.
+
+**`PHP x.y is below 8.1`** — the installer never auto-replaces a live panel's
+PHP. Upgrade manually (Ubuntu/Debian: `ppa:ondrej/php` / packages.sury.org;
+RHEL: Remi's repo), then re-run. `--force` downgrades this to a warning.
+
+**Dependency installs keep prompting** — pass `--yes` to auto-approve them
+(piped/non-interactive runs never prompt at all).
+
+---
+
 **`Could not locate a Pterodactyl panel installation`**
 Pass the path explicitly: `bash install.sh --panel-dir /var/www/pterodactyl`
 (or set `PANEL_DIR`). The directory must contain `artisan`, `config/app.php`
@@ -19,7 +56,10 @@ Your panel source isn't stock (another theme or manual edits). Options:
    inspect `scripts/apply-patches.py` output to fix anchors manually.
 
 **`yarn build:production` fails / runs out of memory**
-Ensure Node 22+ (`node -v`) and ≥2 GB RAM. Common fix:
+Ensure Node 22+ (`node -v`) and ≥2 GB RAM — the installer auto-installs Node
+unless `--no-deps` was used, and automatically retries the build with
+`NODE_OPTIONS=--openssl-legacy-provider` when old webpack meets OpenSSL 3.
+Manual fix:
 ```bash
 cd /var/www/pterodactyl
 rm -rf node_modules && yarn install --network-timeout 300000
@@ -28,8 +68,9 @@ yarn build:production
 Then re-run the installer (it is idempotent and reuses backups).
 
 **`mysqldump not found`**
-Install the client (`mariadb-client`/`mysql-client`) for automatic DB backups,
-or back up manually before installing.
+The installer auto-installs the DB client (unless `--no-deps`); if it was
+skipped or failed, install it manually (`mariadb-client`/`mysql-client`) for
+automatic DB backups, or back up manually before installing.
 
 **Permission errors after install**
 ```bash
