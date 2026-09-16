@@ -1,0 +1,270 @@
+/**
+ * Aurora Theme — Theme Settings page styles.
+ */
+.aurora-settings-tabs {
+    margin-bottom: 16px;
+}
+.aurora-field-row {
+    margin-bottom: 18px;
+}
+.aurora-field-row > label {
+    display: block;
+    margin-bottom: 6px;
+}
+.aurora-field-desc {
+    font-size: 12px;
+    color: var(--aurora-muted);
+    margin-top: 5px;
+}
+.aurora-color-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+    gap: 12px;
+}
+.aurora-color-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--aurora-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+.aurora-color-field input[type='color'] {
+    width: 40px;
+    height: 32px;
+    padding: 2px;
+    border: 1px solid var(--aurora-border);
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+}
+.aurora-color-field input[type='text'] {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    color: var(--aurora-text);
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 13px;
+}
+.aurora-color-field input[type='text']:focus {
+    outline: none;
+}
+.aurora-color-meta {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+.aurora-color-meta small {
+    color: var(--aurora-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.aurora-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--aurora-border);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+.aurora-check input {
+    margin-top: 3px;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--aurora-primary);
+}
+.aurora-check strong {
+    display: block;
+    font-size: 13.5px;
+}
+.aurora-check span {
+    font-size: 12px;
+    color: var(--aurora-muted);
+}
+.aurora-range-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.aurora-range-row input[type='range'] {
+    flex: 1;
+    accent-color: var(--aurora-primary);
+}
+.aurora-range-row output {
+    min-width: 64px;
+    text-align: right;
+    font-family: ui-monospace, Menlo, monospace;
+    color: var(--aurora-text);
+}
+.aurora-savebar {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 14px 4px 6px;
+    background: linear-gradient(transparent, var(--aurora-bg) 30%);
+}
+.aurora-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+}
+.aurora-preset {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--aurora-border);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.aurora-preset h4 {
+    margin: 0;
+    font-size: 15px;
+}
+.aurora-preset p {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--aurora-muted);
+    flex: 1;
+}
+.aurora-preset-dots {
+    display: flex;
+    gap: 6px;
+}
+.aurora-preset-dots span {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.aurora-logo-preview {
+    max-height: 56px;
+    max-width: 220px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed var(--aurora-border);
+    padding: 6px;
+    margin-top: 8px;
+}
+
+/* Live preview */
+.aurora-preview-sticky {
+    position: sticky;
+    top: 65px;
+}
+.aurora-preview {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--ap-border, #263056);
+    background: var(--ap-bg, #0b1020);
+    color: var(--ap-text, #eef2ff);
+    font-size: 13px;
+    transition: background 0.2s;
+}
+.aurora-preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--ap-surface, #101737);
+    border-bottom: 1px solid var(--ap-border, #263056);
+}
+.aurora-preview-bar .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+.aurora-preview-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.aurora-preview-card {
+    background: var(--ap-card, #151d42);
+    border: 1px solid var(--ap-border, #263056);
+    border-radius: var(--ap-radius, 14px);
+    box-shadow: var(--ap-shadow);
+    padding: 12px;
+}
+.aurora-preview-card h5 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    color: var(--ap-text, #eef2ff);
+}
+.aurora-preview-card p {
+    margin: 0;
+    color: var(--ap-muted, #9aa6c7);
+    font-size: 12px;
+}
+.aurora-preview-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.aurora-preview-btn {
+    border: none;
+    cursor: default;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: var(--ap-radius-sm, 8px);
+    background: var(--ap-primary, #4f7cff);
+    color: #fff;
+}
+.aurora-preview-btn.ghost {
+    background: transparent;
+    border: 1px solid var(--ap-border, #263056);
+    color: var(--ap-text, #eef2ff);
+}
+.aurora-preview-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    background: var(--ap-success-soft, rgba(34, 197, 94, 0.14));
+    color: var(--ap-success, #22c55e);
+    border: 1px solid var(--ap-success, #22c55e);
+}
+.aurora-preview-login {
+    border-radius: var(--ap-radius, 14px);
+    padding: 14px;
+    text-align: center;
+    background: var(--ap-surface, #101737);
+    border: 1px solid var(--ap-border, #263056);
+}
+.aurora-preview-login.glass {
+    background: color-mix(in srgb, var(--ap-surface, #101737) 80%, transparent);
+    backdrop-filter: blur(8px);
+}
+.aurora-preview-login.outline {
+    background: transparent;
+}
+.aurora-preview-note {
+    font-size: 12px;
+    color: var(--aurora-muted);
+}
+.aurora-preview[data-pixel='1'] .aurora-preview-card {
+    background-image: radial-gradient(
+        color-mix(in srgb, var(--ap-primary, #4f7cff) 22%, transparent) 1px,
+        transparent 1.5px
+    );
+    background-size: 14px 14px;
+}
+
+@media (max-width: 991px) {
+    .aurora-preview-sticky {
+        position: static;
+        margin-bottom: 16px;
+    }
+}
