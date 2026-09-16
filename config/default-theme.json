@@ -1,0 +1,68 @@
+{
+  "version": "1.1.0",
+  "theme_name": "Orbit Panel Theme",
+  "brand_name": "Pterodactyl",
+  "brand_description": "Premium hosting control panel experience.",
+  "preset": "modern",
+  "assets": {
+    "logo": "",
+    "favicon": "",
+    "site_icon": ""
+  },
+  "colors": {
+    "primary": "#4f8df9",
+    "secondary": "#0ea5e9",
+    "accent": "#22c55e",
+    "background": "#0c1221",
+    "surface": "#141c2f",
+    "card": "#1d2740",
+    "text": "#ecf2ff",
+    "muted_text": "#9aa7c5",
+    "border": "#27344f"
+  },
+  "radius": 14,
+  "shadow_intensity": "medium",
+  "appearance": {
+    "default_mode": "system",
+    "allow_user_theme": true,
+    "sidebar_style": "solid",
+    "sidebar_width": "normal",
+    "sidebar_collapse": false,
+    "compact_mode": false,
+    "dense_mode": false,
+    "card_layout": "grid"
+  },
+  "animation": {
+    "enabled": true,
+    "intensity": "medium",
+    "page_transitions": true,
+    "hover_effects": true,
+    "button_effects": true,
+    "modal_animations": true,
+    "background_effects": false,
+    "loading_animations": true
+  },
+  "pixel": {
+    "enabled": false,
+    "intensity": 20,
+    "decorations": true,
+    "icons": false
+  },
+  "typography": {
+    "font_family": "Inter, \"Segoe UI\", -apple-system, BlinkMacSystemFont, \"Helvetica Neue\", Arial, sans-serif",
+    "font_size": 15,
+    "heading_scale": 1.1,
+    "font_weight": 500,
+    "line_height": 1.45
+  },
+  "login": {
+    "logo": "",
+    "title": "Welcome back",
+    "description": "Sign in to manage your servers and deployments.",
+    "background": "",
+    "background_effects": true,
+    "accent_color": "#0ea5e9",
+    "card_style": "elevated",
+    "illustration": ""
+  }
+}
