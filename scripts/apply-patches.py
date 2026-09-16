@@ -6,7 +6,7 @@ Applies (or removes) small, clearly-marked insertions into existing Pterodactyl
 core files. Every insertion is wrapped in BEGIN/END markers so installs are
 idempotent and uninstalls can cleanly reverse them.
 
-Anchors below were verified against Pterodactyl Panel 1.14.1. If an anchor is
+Anchors below were verified against Pterodactyl Panel 1.14.x and 1.15.x. If an anchor is
 not found the script exits non-zero with a precise error instead of guessing.
 
 Usage:

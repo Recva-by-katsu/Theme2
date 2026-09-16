@@ -8,7 +8,7 @@ Pass the path explicitly: `bash install.sh --panel-dir /var/www/pterodactyl`
 and `resources/scripts`.
 
 **`Unsupported Pterodactyl version 'x.y.z'`**
-Aurora targets panel 1.14.x. If you know what you're doing:
+Aurora targets panel 1.14.x and 1.15.x. If you know what you're doing:
 `bash install.sh --force` (anchors are still verified; mismatches abort unless
 forced).
 

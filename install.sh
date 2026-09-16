@@ -16,7 +16,11 @@ set -euo pipefail
 
 AURORA_REPO="${AURORA_REPO:-Recva-by-katsu/Theme2}"
 AURORA_REF="${AURORA_REF:-main}"
-AURORA_SUPPORTED_PANEL="${AURORA_SUPPORTED_PANEL:-1.14}"
+AURORA_SUPPORTED_PANELS="${AURORA_SUPPORTED_PANELS:-1.14 1.15}"
+# Legacy single-panel override support
+if [ -n "${AURORA_SUPPORTED_PANEL:-}" ]; then
+    AURORA_SUPPORTED_PANELS="$AURORA_SUPPORTED_PANEL"
+fi
 
 # ---------------------------------------------------------------------------
 # 0. Locate the theme source (supports piped execution via self-bootstrap).
@@ -114,7 +118,7 @@ aurora_assert_panel_dir "$PANEL_DIR_RESOLVED"
 aurora_info "Panel directory: $PANEL_DIR_RESOLVED"
 
 PANEL_VERSION="$(aurora_detect_panel_version "$PANEL_DIR_RESOLVED")"
-aurora_info "Panel version: $PANEL_VERSION (supported: ${AURORA_SUPPORTED_PANEL}.x)"
+aurora_info "Panel version: $PANEL_VERSION (supported: $(aurora_format_supported_panels))"
 aurora_check_supported "$PANEL_VERSION" || exit 1
 
 aurora_require_cmd php "Install PHP 8.2+ (the same binary the panel uses) and retry."
@@ -134,7 +138,7 @@ aurora_info "File owner: $WEB_USER:$WEB_GROUP"
 aurora_info "Verifying patch anchors against panel source..."
 if ! python3 "$AURORA_SOURCE_DIR/scripts/apply-patches.py" --panel-dir "$PANEL_DIR_RESOLVED" --action check; then
     if [ -z "$AURORA_FORCE" ]; then
-        aurora_fail "One or more patch anchors did not match. Your panel source differs from 1.14.1. Re-run with --force to try anyway (risky), or restore stock files first."
+        aurora_fail "One or more patch anchors did not match. Your panel source differs from stock 1.14.x / 1.15.x. Re-run with --force to try anyway (risky), or restore stock files first."
     fi
     aurora_warn "Continuing despite anchor mismatch (--force). The build may fail."
 fi

@@ -65,7 +65,7 @@
                     --aurora-radius: {{ $auroraRadius }}px;
                 }
             </style>
-            <link rel="stylesheet" href="{{ asset('themes/aurora/admin.css') }}?v={{ \Pterodactyl\Services\AuroraThemeService::VERSION ?? '1.0.0' }}">
+            <link rel="stylesheet" href="{{ asset('themes/aurora/admin.css') }}?v={{ \Pterodactyl\Services\AuroraThemeService::VERSION ?? '1.1.0' }}">
 
             <!--[if lt IE 9]>
             <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
@@ -217,7 +217,7 @@
             {!! Theme::js('vendor/select2/select2.full.min.js?t={cache-version}') !!}
             {!! Theme::js('js/admin/functions.js?t={cache-version}') !!}
             <script src="/js/autocomplete.js" type="application/javascript"></script>
-            <script src="{{ asset('themes/aurora/admin.js') }}?v={{ \Pterodactyl\Services\AuroraThemeService::VERSION ?? '1.0.0' }}" type="application/javascript"></script>
+            <script src="{{ asset('themes/aurora/admin.js') }}?v={{ \Pterodactyl\Services\AuroraThemeService::VERSION ?? '1.1.0' }}" type="application/javascript"></script>
 
             @if(Auth::user()->root_admin)
                 <script>

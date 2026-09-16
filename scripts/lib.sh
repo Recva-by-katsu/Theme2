@@ -5,7 +5,7 @@
 #
 # shellcheck disable=SC2034
 
-AURORA_LIB_VERSION="1.0.0"
+AURORA_LIB_VERSION="1.1.0"
 
 # ---------------------------------------------------------------------------
 # Logging helpers — [INFO] / [OK] / [WARN] / [ERROR]
@@ -175,10 +175,31 @@ aurora_detect_panel_version() {
     printf '%s' "$version"
 }
 
+aurora_format_supported_panels() {
+    local raw="${AURORA_SUPPORTED_PANEL:-${AURORA_SUPPORTED_PANELS:-1.14 1.15}}"
+    local list=($raw)
+    local formatted=()
+    for item in "${list[@]}"; do
+        formatted+=("${item}.x")
+    done
+    local result=""
+    for item in "${formatted[@]}"; do
+        if [ -z "$result" ]; then
+            result="$item"
+        else
+            result="$result, $item"
+        fi
+    done
+    printf '%s' "$result"
+}
+
 # Check that the panel version is supported. Returns 0 when supported (or forced).
 aurora_check_supported() {
     local version="$1"
-    local supported_major_minor="${AURORA_SUPPORTED_PANEL:-1.14}"
+    local raw_supported="${AURORA_SUPPORTED_PANEL:-${AURORA_SUPPORTED_PANELS:-1.14 1.15}}"
+    local supported_list=($raw_supported)
+    local supported_label
+    supported_label="$(aurora_format_supported_panels)"
 
     if [ -n "${AURORA_FORCE:-}" ]; then
         aurora_warn "Version check bypassed via --force (detected panel version: ${version})."
@@ -187,15 +208,17 @@ aurora_check_supported() {
 
     case "$version" in
         canary|unknown)
-            aurora_warn "Panel version is '${version}' — treating as a development checkout. Aurora targets Pterodactyl ${supported_major_minor}.x."
+            aurora_warn "Panel version is '${version}' — treating as a development checkout. Aurora targets Pterodactyl ${supported_label}."
             aurora_warn "Continuing because the source layout will be verified file-by-file. Use --force to skip this warning."
             return 0
             ;;
-        "${supported_major_minor}."*)
-            return 0
-            ;;
         *)
-            aurora_error "Unsupported Pterodactyl version '${version}'. Aurora ${AURORA_THEME_VERSION:-} supports panel ${supported_major_minor}.x."
+            for prefix in "${supported_list[@]}"; do
+                if [ "$version" = "$prefix" ] || [[ "$version" == "$prefix".* ]]; then
+                    return 0
+                fi
+            done
+            aurora_error "Unsupported Pterodactyl version '${version}'. Aurora ${AURORA_THEME_VERSION:-} supports panel ${supported_label}."
             aurora_error "Re-run with --force to attempt installation anyway (not recommended)."
             return 1
             ;;

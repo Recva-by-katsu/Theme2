@@ -14,7 +14,7 @@
 
 return [
     // Theme version — kept in sync with the repository `version` file.
-    'version' => '1.0.0',
+    'version' => '1.1.0',
 
     // Cache (seconds) for the resolved theme config. Cleared on every save.
     'cache_ttl' => (int) env('AURORA_THEME_CACHE', 300),
