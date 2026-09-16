@@ -55,6 +55,28 @@ Your panel source isn't stock (another theme or manual edits). Options:
 2. `install.sh --force` — the installer continues, but the build may fail;
    inspect `scripts/apply-patches.py` output to fix anchors manually.
 
+**``The `bg-blue-500/75` class does not exist`` (or `text-primary-500/50`)**
+
+Only affects theme versions < 1.2.1. The remapped Tailwind palette in
+`tailwind.config.js` must hand Tailwind *function* colors for every token; raw
+`var(...)` / `color-mix(...)` strings lose all alpha-modified classes
+(`bg-blue-500/75`), and `@apply` in the stock panel stylesheets then aborts the
+build. Symptoms: step `[8/9] Building frontend` fails, the installer rolls the
+panel files back, and the log points at
+`resources/scripts/components/elements/button/style.module.css` or
+`.../elements/inputs/styles.module.css`.
+
+Fix: update the theme (`bash update.sh`) or copy the current
+`frontend/overrides/tailwind.config.js` onto the panel and rebuild. The theme
+ships a guard you can run any time:
+
+```bash
+node scripts/verify-tailwind.js --panel-dir /var/www/pterodactyl
+```
+`[OK]` means the color pipeline is healthy; `[FAIL]` names the offending
+tokens. Since 1.2.1 the installer runs this automatically before the build and
+warns (without aborting) if it ever regresses.
+
 **`yarn build:production` fails / runs out of memory**
 Ensure Node 22+ (`node -v`) and ≥2 GB RAM — the installer auto-installs Node
 unless `--no-deps` was used, and automatically retries the build with

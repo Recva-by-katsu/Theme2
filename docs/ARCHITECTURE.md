@@ -48,6 +48,11 @@ Single rule: **components never hardcode themeable values** — they consume
    styled-components and CSS modules follow the admin config at runtime —
    including dark/light mode. Verified: no other color families are used in
    stock sources.
+   Every token is exposed as a Tailwind *function* color (`alphaColor()`) so
+   alpha modifiers keep working: stock stylesheets contain
+   `@apply bg-blue-500/75` / `text-primary-500/50`, and Tailwind can only
+   resolve those by parsing the configured color. `scripts/verify-tailwind.js`
+   guards the property (see TROUBLESHOOTING → build failures).
 2. **Full replacements** (27 files, same module APIs): routers, navigation,
    auth screens, dashboard, server console, shared containers
    (`ContentBox`, `GreyRowBox`, `TitledGreyBox`), dialogs/menus/error screens,
