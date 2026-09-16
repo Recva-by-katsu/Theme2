@@ -1,0 +1,20 @@
+# Aurora theme builder / release artifacts
+.release/
+*.tar.gz
+*.zip
+
+# Local dev
+node_modules/
+.vendor/
+.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test fixtures
+.tests/

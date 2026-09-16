@@ -1,0 +1,66 @@
+{
+    "brand": {
+        "name": "",
+        "description": "Game & application server management, beautifully simple.",
+        "logoUrl": "",
+        "faviconUrl": "",
+        "footerText": ""
+    },
+    "colors": {
+        "primary": "#4f7cff",
+        "secondary": "#7c5cff",
+        "accent": "#22d3ee",
+        "background": "#0b1020",
+        "surface": "#101737",
+        "card": "#151d42",
+        "text": "#eef2ff",
+        "muted": "#9aa6c7",
+        "border": "#263056",
+        "success": "#22c55e",
+        "warning": "#f59e0b",
+        "danger": "#ef4444",
+        "info": "#38bdf8"
+    },
+    "appearance": {
+        "mode": "system",
+        "allowUserSwitch": true,
+        "sidebarStyle": "floating",
+        "sidebarCollapsed": false,
+        "compact": false,
+        "dense": false,
+        "cardLayout": "grid",
+        "radius": 14,
+        "shadow": "soft"
+    },
+    "animations": {
+        "enabled": true,
+        "intensity": "normal",
+        "pageTransitions": true,
+        "hoverEffects": true,
+        "buttonEffects": true,
+        "modalAnimations": true,
+        "backgroundEffects": true,
+        "loadingStyle": "skeleton"
+    },
+    "pixel": {
+        "enabled": false,
+        "intensity": "subtle",
+        "decorations": true,
+        "pixelIcons": false
+    },
+    "typography": {
+        "fontFamily": "system",
+        "baseSize": 15,
+        "headingScale": 1.0,
+        "weight": "400",
+        "lineHeight": 1.55
+    },
+    "login": {
+        "title": "",
+        "subtitle": "",
+        "showLogo": true,
+        "background": "mesh",
+        "cardStyle": "glass",
+        "sideArt": true
+    }
+}
