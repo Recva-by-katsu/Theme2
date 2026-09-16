@@ -1,6 +1,6 @@
 # Aurora Theme for Pterodactyl Panel
 
-A complete, production-quality UI/UX redesign for **Pterodactyl Panel 1.14.x** —
+A complete, production-quality UI/UX redesign for **Pterodactyl Panel 1.14.x & 1.15.x** —
 not a CSS skin. Aurora replaces the navigation, authentication screens, dashboard,
 server console and admin area with a modern SaaS-style interface, and adds a real
 **Admin → Theme Settings** system (colors, modes, animations, pixel accents,
@@ -14,8 +14,8 @@ typography, login page, presets, live preview) backed by the database.
   migrations, frontend build, verification and rollback — plus updater and
   uninstaller.
 
-> Target: **Pterodactyl Panel 1.14.x** (verified against 1.14.1).
-> Theme version: **1.0.0**
+> Target: **Pterodactyl Panel 1.14.x & 1.15.x** (verified against 1.14.1 and 1.15.x).
+> Theme version: **1.1.0**
 
 ---
 
@@ -69,7 +69,7 @@ typography, login page, presets, live preview) backed by the database.
 
 ## Requirements
 
-- Pterodactyl Panel **1.14.x** (installer verifies; `--force` overrides)
+- Pterodactyl Panel **1.14.x or 1.15.x** (installer verifies; `--force` overrides)
 - Root access on the panel host
 - PHP 8.2+ (same binary the panel uses), `python3`
 - Node.js 22+ and `yarn` (for the frontend build; or `--skip-build`)
@@ -111,7 +111,7 @@ AURORA_REPO=MyOrg/MyFork AURORA_REF=dev bash install.sh   # install a fork/ref
 What the installer does:
 
 1. Detects OS, verifies root, locates the panel (`--panel-dir` or auto-detect)
-2. Detects the panel version and checks 1.14.x support
+2. Detects the panel version and checks 1.14.x / 1.15.x support
 3. Verifies dependencies and patch anchors **before touching anything**
 4. Backs up every modified file + compiled assets + database dump to
    `/var/backups/aurora-theme/<timestamp>/`
@@ -239,7 +239,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full technical breakdow
 
 ## Troubleshooting
 
-**Install fails on patch anchors** — your panel source differs from stock 1.14.1
+**Install fails on patch anchors** — your panel source differs from stock 1.14.x / 1.15.x
 (another theme/modification). Restore stock files or re-run with `--force`.
 
 **Build fails (`yarn build:production`)** — ensure Node 22+ and enough RAM
@@ -294,7 +294,7 @@ components`; never hardcode themeable values in components.
 
 ## Credits
 
-- Built for [Pterodactyl Panel](https://github.com/pterodactyl/panel) 1.14.x.
+- Built for [Pterodactyl Panel](https://github.com/pterodactyl/panel) 1.14.x & 1.15.x.
 - Implementation techniques studied from the official panel source and the
   open-source theme community (see docs). All Aurora code, design and assets
   are original.

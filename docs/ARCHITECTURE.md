@@ -1,12 +1,12 @@
 # Aurora Architecture
 
-Technical reference for how the Aurora theme integrates with Pterodactyl Panel 1.14.1.
+Technical reference for how the Aurora theme integrates with Pterodactyl Panel 1.14.x & 1.15.x.
 
 ## 1. Source facts (verified, not assumed)
 
 | Area | Finding |
 |---|---|
-| Panel version | 1.14.1 — React 16 + TS + webpack 5 + Tailwind 3 + styled-components/twin.macro |
+| Panel version | 1.14.x & 1.15.x — React 16 + TS + webpack 5 + Tailwind 3 + styled-components/twin.macro |
 | Build | `yarn build:production` = clean `public/assets/*.js` + `webpack --mode production` |
 | Auth screens | React (`routers/AuthenticationRouter`), not Blade — Blade only bootstraps `#app` |
 | User/server pages | React SPA (`resources/scripts`) |

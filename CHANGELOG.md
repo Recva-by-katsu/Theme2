@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 — 2026-09-16
+
+Added official support for Pterodactyl Panel 1.15.x alongside 1.14.x.
+
+- **Panel compatibility**: Expanded official support to include Pterodactyl Panel 1.15.x.
+- **Version checking**: Updated version verification in `scripts/lib.sh` and `install.sh` to use `AURORA_SUPPORTED_PANELS` list with default `"1.14 1.15"`. Backward compatibility for legacy single-panel override `AURORA_SUPPORTED_PANEL` is maintained.
+- **Documentation**: Updated all references across `README.md`, `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md`, and `docs/TROUBLESHOOTING.md` to reflect 1.14.x and 1.15.x support.
+- **Version bump**: Bumped Aurora Theme version to `1.1.0` across codebase (`version`, `AuroraThemeService::VERSION`, `config/aurora.php`, `admin.blade.php`, `scripts/lib.sh`).
+
 ## 1.0.0 — 2026-09-16
 
 Initial release of the Aurora Theme for Pterodactyl Panel 1.14.x.

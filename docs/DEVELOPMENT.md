@@ -7,7 +7,7 @@ git clone https://github.com/Recva-by-katsu/Theme2.git
 cd Theme2
 ```
 
-You need a Pterodactyl 1.14.x checkout (or install) to validate against:
+You need a Pterodactyl 1.14.x or 1.15.x checkout (or install) to validate against:
 
 ```bash
 git clone --branch v1.14.1 --depth 1 https://github.com/pterodactyl/panel.git /tmp/panel
@@ -54,7 +54,7 @@ cd /path/to/panel && yarn install && yarn tsc && yarn build:production
   the stock module's exports/props so the rest of the panel keeps working.
   Note the stock API at the top of each file.
 - **Patches stay marked.** New core edits go through `apply-patches.py` with
-  BEGIN/END markers and a `check`-able anchor verified against 1.14.1.
+  BEGIN/END markers and a `check`-able anchor verified against 1.14.x and 1.15.x.
 - **Manifest first.** Any new managed file must be added to `scripts/manifest.sh`
   (new path, replaced file, or tree) or the installer/uninstaller will ignore it.
 - **Blade defensively.** Admin Blade must render even if the theme backend is
