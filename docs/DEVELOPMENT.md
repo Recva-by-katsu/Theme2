@@ -51,6 +51,18 @@ cd /path/to/panel && yarn install && yarn tsc && yarn build:production
   come from `var(--aurora-*)` (CSS), the remapped Tailwind scale, or
   `useAuroraConfig()` (React). Backend-driven values go through
   `AuroraThemeService`.
+- **Palette tokens stay alpha-capable.** The stock panel applies alpha
+  modifiers to the remapped scale (`@apply bg-blue-500/75` in
+  `elements/button/style.module.css`, `@apply text-primary-500/50 border
+  border-primary-500` in `elements/inputs/styles.module.css`). Tailwind resolves
+  those by parsing the color, so every entry in `theme.extend.colors` must be
+  either a literal color or a function built with `alphaColor()` — never a bare
+  `var(...)`/`color-mix(...)` string, which silently drops the class and fails
+  the build. Verify with:
+
+  ```bash
+  node scripts/verify-tailwind.js --panel-dir /path/to/panel   # needs panel deps installed
+  ```
 - **Mirror the schema.** `AuroraThemeService::defaults()` (PHP),
   `config/theme.defaults.json`, and `frontend/aurora/defaults.ts` must stay in
   sync. Validate in both `AuroraThemeRequest` and `AuroraThemeService::sanitize()`.

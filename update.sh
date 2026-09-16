@@ -144,6 +144,7 @@ if [ -n "$DO_ROLLBACK" ]; then
 
     aurora_artisan "$PANEL_DIR_RESOLVED" migrate --force >/dev/null 2>&1 || true
     if [ -z "$SKIP_BUILD" ]; then
+        aurora_verify_tailwind "$PANEL_DIR_RESOLVED" "$AURORA_SOURCE_DIR/scripts/verify-tailwind.js"
         if command -v yarn >/dev/null 2>&1; then
             aurora_run "yarn build:production" bash -c "cd \"$PANEL_DIR_RESOLVED\" && yarn build:production"
         elif command -v npm >/dev/null 2>&1; then

@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.2.1 — 2026-09-16
+
+**Fix: the frontend build failed on a stock 1.14.x / 1.15.x panel with
+``The `bg-blue-500/75` class does not exist``.**
+
+- **Root cause.** `frontend/overrides/tailwind.config.js` remapped every color
+  token to raw CSS expressions (`var(--aurora-*)`, `color-mix(...)`). Tailwind
+  only resolves an alpha-modified utility such as `bg-blue-500/75` by *parsing*
+  the configured color; for a `var()`/`color-mix()` string the candidate is
+  dropped, so `@apply` in the stock stylesheets
+  (`elements/button/style.module.css`, `elements/inputs/styles.module.css`)
+  aborted the webpack build. The installer rolled the panel back, so nothing
+  was left half-installed.
+- **Fix.** Every token is now exposed as a Tailwind *function* color
+  (`alphaColor()` helper): without an alpha modifier it returns the token
+  unchanged, with one it returns
+  `color-mix(in srgb, <token> <opacity>, transparent)` — `transparent` is
+  premultiplied, so the result is exactly the token at that opacity. Function
+  colors are Tailwind's documented pattern for CSS-variable palettes and work
+  for `bg-*`, `text-*`, `border-*`, `ring-*`, `divide-*`, `shadow-*`, `fill`/
+  `stroke`, and the classic `bg-opacity-*` utilities (which now actually apply).
+- **New `scripts/verify-tailwind.js`** — runs the panel's own
+  Tailwind/PostCSS pipeline over the alpha patterns the stock stylesheets use
+  and over the stylesheets themselves, in seconds instead of a full webpack
+  build: `node scripts/verify-tailwind.js --panel-dir /var/www/pterodactyl`.
+  The installer (and `update.sh --rollback`) run it before every build as a
+  warn-only guard.
+- **Verified** with full production builds (`webpack --mode production`) of
+  panel **1.15.1** (tailwind 3.4.x) and **1.14.1** (tailwind 3.0.x) checkouts
+  with the theme installed, plus targeted PostCSS compiles of the two stock
+  stylesheets that used to fail.
+- No visual change for existing installs: tokens without an alpha modifier
+  resolve to the same values as before.
+- Version bump to `1.2.1` across the codebase.
+
 ## 1.2.0 — 2026-09-16
 
 Smart installer: the installer now **detects and auto-installs** every system

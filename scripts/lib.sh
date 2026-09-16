@@ -5,7 +5,7 @@
 #
 # shellcheck disable=SC2034
 
-AURORA_LIB_VERSION="1.2.0"
+AURORA_LIB_VERSION="1.2.1"
 
 # ---------------------------------------------------------------------------
 # Logging helpers — [INFO] / [OK] / [WARN] / [ERROR]
@@ -468,6 +468,37 @@ aurora_installed_version() {
     else
         printf 'none'
     fi
+}
+
+# ---------------------------------------------------------------------------
+# Non-fatal self-test of the Tailwind color pipeline.
+#
+# The stock panel applies alpha modifiers to the remapped palette
+# (`@apply bg-blue-500/75` in elements/button/style.module.css, ...). If a
+# color token is not alpha-capable, `@apply` aborts the webpack build with
+# "The `bg-blue-500/75` class does not exist". This runs the same check in
+# seconds so the operator gets a precise hint instead of a 20-minute build
+# failure. It never aborts the install: the real build stays authoritative.
+#
+# Usage: aurora_verify_tailwind <panel_dir> <path-to-verify-tailwind.js>
+# ---------------------------------------------------------------------------
+aurora_verify_tailwind() {
+    local panel_dir="$1" script="${2:-}"
+    if [ -z "$script" ] || [ ! -f "$script" ]; then return 0; fi
+    if ! command -v node >/dev/null 2>&1; then return 0; fi
+
+    local out
+    if out="$(node "$script" --panel-dir "$panel_dir" 2>&1)"; then
+        if [ -n "${AURORA_VERBOSE:-}" ]; then
+            printf '%s\n' "$out" | sed 's/^/        /'
+        fi
+        aurora_ok "Tailwind color pipeline OK"
+        return 0
+    fi
+
+    aurora_warn "Tailwind color self-test reported a problem:"
+    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -n 12 | sed 's/^/        /'
+    aurora_warn "Continuing anyway — the frontend build below is authoritative."
 }
 
 # Compare dotted versions: returns 0 if $1 == $2, 1 if $1 < $2, 2 if $1 > $2.

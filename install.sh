@@ -379,9 +379,18 @@ else
     aurora_info "Using package manager: $PKG_MANAGER"
     if [ "$PKG_MANAGER" = "yarn" ]; then
         aurora_build_cmd "yarn install" "yarn install --network-timeout 300000"
-        aurora_build_cmd "yarn build:production" "yarn build:production"
     else
         aurora_build_cmd "npm install" "npm install --no-audit --no-fund"
+    fi
+
+    # Cheap regression guard: the remapped Tailwind palette must stay
+    # alpha-capable, otherwise the stock `@apply bg-blue-500/75` rules abort
+    # the build. Warn-only — the build below decides.
+    aurora_verify_tailwind "$PANEL_DIR_RESOLVED" "$AURORA_SOURCE_DIR/scripts/verify-tailwind.js"
+
+    if [ "$PKG_MANAGER" = "yarn" ]; then
+        aurora_build_cmd "yarn build:production" "yarn build:production"
+    else
         aurora_build_cmd "webpack production build" "npx cross-env NODE_ENV=production webpack --mode production"
     fi
     if [ ! -f "$PANEL_DIR_RESOLVED/public/assets/manifest.json" ]; then

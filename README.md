@@ -15,7 +15,7 @@ typography, login page, presets, live preview) backed by the database.
   uninstaller.
 
 > Target: **Pterodactyl Panel 1.14.x & 1.15.x** (verified against 1.14.1 and 1.15.x).
-> Theme version: **1.2.0**
+> Theme version: **1.2.1**
 
 ---
 
@@ -79,6 +79,9 @@ typography, login page, presets, live preview) backed by the database.
   `pacman`, `apk`. Prefer manual control? Pass `--no-deps` (or
   `AURORA_DEPS_MODE=off`) to get the legacy behaviour — the installer then
   only verifies and reports exactly what to install.
+- Browsers: the palette is built from CSS `color-mix()`, so Chrome/Edge 111+,
+  Firefox 113+ or Safari 16.2+ is required (older browsers get the panel
+  unthemed defaults for those tokens).
 
 ---
 
