@@ -12,25 +12,43 @@
  */
 const colors = require('tailwindcss/colors');
 
-const ramp = (name) => ({
-    50: `color-mix(in srgb, var(--aurora-${name}) 8%, white)`,
-    100: `color-mix(in srgb, var(--aurora-${name}) 14%, white)`,
-    200: `color-mix(in srgb, var(--aurora-${name}) 28%, white)`,
-    300: `color-mix(in srgb, var(--aurora-${name}) 48%, white)`,
-    400: `color-mix(in srgb, var(--aurora-${name}) 70%, white)`,
-    500: `var(--aurora-${name})`,
-    600: `color-mix(in srgb, var(--aurora-${name}) 86%, black)`,
-    700: `color-mix(in srgb, var(--aurora-${name}) 70%, black)`,
-    800: `color-mix(in srgb, var(--aurora-${name}) 52%, black)`,
-    900: `color-mix(in srgb, var(--aurora-${name}) 36%, black)`,
-    950: `color-mix(in srgb, var(--aurora-${name}) 24%, black)`,
-});
+// Tailwind 3 implements `bg-blue-500/75` and `bg-opacity-*` by asking the
+// color for a variant with an alpha channel. It cannot parse color-mix()/var()
+// strings, so a plain-string scale makes those utilities "not exist" and the
+// stock panel build fails (button/style.module.css, inputs/styles.module.css).
+// Exposing each step as a function lets Tailwind (and twin.macro) request an
+// alpha, which is layered on with a second color-mix(). Called without an
+// opacity — theme(), twin's theme(), @tailwindcss/forms — it returns the
+// opaque color.
+const withAlpha = (value) => ({ opacityValue } = {}) => {
+    if (opacityValue === undefined || opacityValue === 1 || opacityValue === '1') return value;
+    const numeric = Number(opacityValue);
+    const pct = Number.isFinite(numeric) ? `${Math.round(numeric * 10000) / 100}%` : `calc(${opacityValue} * 100%)`;
+    return `color-mix(in srgb, ${value} ${pct}, transparent)`;
+};
+
+const alphaScale = (scale) => Object.fromEntries(Object.entries(scale).map(([step, value]) => [step, withAlpha(value)]));
+
+const ramp = (name) =>
+    alphaScale({
+        50: `color-mix(in srgb, var(--aurora-${name}) 8%, white)`,
+        100: `color-mix(in srgb, var(--aurora-${name}) 14%, white)`,
+        200: `color-mix(in srgb, var(--aurora-${name}) 28%, white)`,
+        300: `color-mix(in srgb, var(--aurora-${name}) 48%, white)`,
+        400: `color-mix(in srgb, var(--aurora-${name}) 70%, white)`,
+        500: `var(--aurora-${name})`,
+        600: `color-mix(in srgb, var(--aurora-${name}) 86%, black)`,
+        700: `color-mix(in srgb, var(--aurora-${name}) 70%, black)`,
+        800: `color-mix(in srgb, var(--aurora-${name}) 52%, black)`,
+        900: `color-mix(in srgb, var(--aurora-${name}) 36%, black)`,
+        950: `color-mix(in srgb, var(--aurora-${name}) 24%, black)`,
+    });
 
 // Neutral/gray scale → Aurora surfaces & text. These tokens are used as BOTH
 // container backgrounds (600-900) and text colors (50-500) across the panel,
 // so each step resolves to the semantic token that stays readable in both
 // dark and light modes.
-const gray = {
+const gray = alphaScale({
     50: 'var(--aurora-text)',
     100: 'var(--aurora-text)',
     200: 'var(--aurora-text)',
@@ -41,7 +59,7 @@ const gray = {
     700: 'var(--aurora-surface)',
     800: 'var(--aurora-bg)',
     900: 'var(--aurora-bg)',
-};
+});
 
 module.exports = {
     content: ['./resources/scripts/**/*.{js,ts,tsx}'],
@@ -69,7 +87,7 @@ module.exports = {
                 yellow: ramp('warning'),
                 amber: ramp('warning'),
                 // Direct design-token access for Aurora components.
-                aurora: {
+                aurora: alphaScale({
                     primary: 'var(--aurora-primary)',
                     secondary: 'var(--aurora-secondary)',
                     accent: 'var(--aurora-accent)',
@@ -83,7 +101,7 @@ module.exports = {
                     warning: 'var(--aurora-warning)',
                     danger: 'var(--aurora-danger)',
                     info: 'var(--aurora-info)',
-                },
+                }),
             },
             fontSize: {
                 '2xs': '0.625rem',

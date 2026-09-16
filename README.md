@@ -15,7 +15,7 @@ typography, login page, presets, live preview) backed by the database.
   uninstaller.
 
 > Target: **Pterodactyl Panel 1.14.x & 1.15.x** (verified against 1.14.1 and 1.15.x).
-> Theme version: **1.2.0**
+> Theme version: **1.2.1**
 
 ---
 
