@@ -1,0 +1,7 @@
+app/Http/Controllers/Admin/Settings/ThemeController.php
+app/Http/Requests/Admin/Settings/ThemeSettingsFormRequest.php
+app/Services/Themes/ThemeSettingsService.php
+public/themes/pterodactyl/css/orbit-theme.css
+resources/scripts/assets/css/theme.css
+resources/scripts/context/ThemeContext.tsx
+resources/views/admin/settings/theme.blade.php

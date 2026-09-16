@@ -1,0 +1,127 @@
+:root {
+    --theme-primary: #4f8df9;
+    --theme-secondary: #0ea5e9;
+    --theme-accent: #22c55e;
+    --theme-bg: #0c1221;
+    --theme-surface: #141c2f;
+    --theme-card: #1d2740;
+    --theme-text: #ecf2ff;
+    --theme-muted: #9aa7c5;
+    --theme-border: #27344f;
+    --theme-radius: 14px;
+}
+
+body.orbit-admin {
+    background: var(--theme-bg) !important;
+    color: var(--theme-text) !important;
+}
+
+.orbit-admin .main-header .logo,
+.orbit-admin .main-header .navbar,
+.orbit-admin .main-sidebar,
+.orbit-admin .content-wrapper,
+.orbit-admin .right-side {
+    background: var(--theme-surface) !important;
+}
+
+.orbit-admin .content-wrapper,
+.orbit-admin .right-side {
+    border-left: 1px solid var(--theme-border);
+}
+
+.orbit-admin .box,
+.orbit-admin .small-box,
+.orbit-admin .nav-tabs-custom,
+.orbit-admin .form-control,
+.orbit-admin .btn,
+.orbit-admin .main-footer {
+    border-radius: var(--theme-radius);
+}
+
+.orbit-admin .box,
+.orbit-admin .small-box,
+.orbit-admin .nav-tabs-custom,
+.orbit-admin .main-footer,
+.orbit-admin .main-header .navbar,
+.orbit-admin .main-header .logo,
+.orbit-admin .main-sidebar {
+    border: 1px solid var(--theme-border) !important;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+}
+
+.orbit-admin .box,
+.orbit-admin .small-box,
+.orbit-admin .nav-tabs-custom,
+.orbit-admin .main-footer {
+    background: var(--theme-card) !important;
+    color: var(--theme-text) !important;
+}
+
+.orbit-admin .content-header > h1,
+.orbit-admin .content-header small,
+.orbit-admin .main-sidebar .sidebar-menu > li > a,
+.orbit-admin .main-sidebar .sidebar-menu > li.header,
+.orbit-admin .box-title,
+.orbit-admin .breadcrumb,
+.orbit-admin .text-muted,
+.orbit-admin label {
+    color: var(--theme-muted) !important;
+}
+
+.orbit-admin .content-header > h1 {
+    color: var(--theme-text) !important;
+}
+
+.orbit-admin .main-sidebar .sidebar-menu > li:hover > a,
+.orbit-admin .main-sidebar .sidebar-menu > li.active > a,
+.orbit-admin .nav-tabs-custom > .nav-tabs > li.active,
+.orbit-admin .nav-tabs-custom > .nav-tabs > li.active > a,
+.orbit-admin .btn-primary,
+.orbit-admin .label-primary,
+.orbit-admin .bg-light-blue {
+    background: var(--theme-primary) !important;
+    color: #fff !important;
+}
+
+.orbit-admin .btn-default,
+.orbit-admin .btn-success,
+.orbit-admin .btn-warning,
+.orbit-admin .btn-danger,
+.orbit-admin .form-control {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--theme-border) !important;
+}
+
+.orbit-admin .form-control:focus {
+    border-color: var(--theme-primary) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-primary) 30%, transparent);
+}
+
+.orbit-admin .orbit-admin-stat {
+    min-height: 120px;
+    background: linear-gradient(160deg, color-mix(in srgb, var(--theme-primary) 20%, var(--theme-card)), var(--theme-card)) !important;
+}
+
+.orbit-admin .orbit-admin-stat .inner h3,
+.orbit-admin .orbit-admin-stat .inner p {
+    color: var(--theme-text);
+}
+
+.orbit-admin .theme-preview {
+    border: 1px solid var(--theme-border);
+    border-radius: var(--theme-radius);
+    background: var(--theme-surface);
+    color: var(--theme-text);
+    padding: 16px;
+}
+
+.orbit-admin .theme-preview p {
+    color: var(--theme-muted);
+    margin-bottom: 12px;
+}
+
+.orbit-admin .theme-preview .btn-primary {
+    margin-right: 8px;
+    border: none;
+}

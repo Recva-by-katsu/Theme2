@@ -1,0 +1,2634 @@
+diff --git a/app/Http/Controllers/Admin/BaseController.php b/app/Http/Controllers/Admin/BaseController.php
+index 2b69330..2de5ee5 100644
+--- a/app/Http/Controllers/Admin/BaseController.php
++++ b/app/Http/Controllers/Admin/BaseController.php
+@@ -4,6 +4,10 @@ namespace Pterodactyl\Http\Controllers\Admin;
+ 
+ use Illuminate\View\View;
+ use Pterodactyl\Http\Controllers\Controller;
++use Pterodactyl\Models\Location;
++use Pterodactyl\Models\Node;
++use Pterodactyl\Models\Server;
++use Pterodactyl\Models\User;
+ use Pterodactyl\Services\Helpers\SoftwareVersionService;
+ 
+ class BaseController extends Controller
+@@ -20,6 +24,15 @@ class BaseController extends Controller
+      */
+     public function index(): View
+     {
+-        return view('admin.index', ['version' => $this->version]);
++        return view('admin.index', [
++            'version' => $this->version,
++            'stats' => [
++                'users' => User::count(),
++                'servers' => Server::count(),
++                'nodes' => Node::count(),
++                'locations' => Location::count(),
++                'suspended_servers' => Server::where('status', Server::STATUS_SUSPENDED)->count(),
++            ],
++        ]);
+     }
+ }
+diff --git a/app/Http/ViewComposers/AssetComposer.php b/app/Http/ViewComposers/AssetComposer.php
+index d42f8a8..44e7f70 100644
+--- a/app/Http/ViewComposers/AssetComposer.php
++++ b/app/Http/ViewComposers/AssetComposer.php
+@@ -2,7 +2,9 @@
+ 
+ namespace Pterodactyl\Http\ViewComposers;
+ 
++use Illuminate\Support\Arr;
+ use Illuminate\View\View;
++use Pterodactyl\Services\Themes\ThemeSettingsService;
+ use Pterodactyl\Services\Helpers\AssetHashService;
+ 
+ class AssetComposer
+@@ -10,8 +12,10 @@ class AssetComposer
+     /**
+      * AssetComposer constructor.
+      */
+-    public function __construct(private AssetHashService $assetHashService)
+-    {
++    public function __construct(
++        private AssetHashService $assetHashService,
++        private ThemeSettingsService $themeSettingsService,
++    ) {
+     }
+ 
+     /**
+@@ -19,7 +23,14 @@ class AssetComposer
+      */
+     public function compose(View $view): void
+     {
++        $themeSettings = $this->themeSettingsService->get();
++        $cssVariables = collect($this->themeSettingsService->toCssVariables($themeSettings))
++            ->map(fn ($value, $key) => sprintf('%s:%s', $key, preg_replace('/[^#(),.%\-\w\s"\']/', '', (string) $value)))
++            ->implode(';');
++
+         $view->with('asset', $this->assetHashService);
++        $view->with('panelTheme', $themeSettings);
++        $view->with('panelThemeCssVariables', $cssVariables);
+         $view->with('siteConfiguration', [
+             'name' => config('app.name') ?? 'Pterodactyl',
+             'locale' => config('app.locale') ?? 'en',
+@@ -27,6 +38,22 @@ class AssetComposer
+                 'enabled' => config('recaptcha.enabled', false),
+                 'siteKey' => config('recaptcha.website_key') ?? '',
+             ],
++            'theme' => [
++                'version' => Arr::get($themeSettings, 'version', ThemeSettingsService::THEME_VERSION),
++                'themeName' => Arr::get($themeSettings, 'theme_name', 'Orbit Panel Theme'),
++                'brandName' => Arr::get($themeSettings, 'brand_name', config('app.name', 'Pterodactyl')),
++                'brandDescription' => Arr::get($themeSettings, 'brand_description', ''),
++                'assets' => Arr::get($themeSettings, 'assets', []),
++                'login' => Arr::get($themeSettings, 'login', []),
++                'colors' => Arr::get($themeSettings, 'colors', []),
++                'radius' => Arr::get($themeSettings, 'radius', 14),
++                'shadowIntensity' => Arr::get($themeSettings, 'shadow_intensity', 'medium'),
++                'appearance' => Arr::get($themeSettings, 'appearance', []),
++                'animation' => Arr::get($themeSettings, 'animation', []),
++                'pixel' => Arr::get($themeSettings, 'pixel', []),
++                'typography' => Arr::get($themeSettings, 'typography', []),
++                'preset' => Arr::get($themeSettings, 'preset', 'modern'),
++            ],
+         ]);
+     }
+ }
+diff --git a/resources/scripts/assets/css/GlobalStylesheet.ts b/resources/scripts/assets/css/GlobalStylesheet.ts
+index f7c2fe7..1ecefb5 100644
+--- a/resources/scripts/assets/css/GlobalStylesheet.ts
++++ b/resources/scripts/assets/css/GlobalStylesheet.ts
+@@ -1,9 +1,28 @@
+-import tw from 'twin.macro';
+ import { createGlobalStyle } from 'styled-components/macro';
+ // @ts-expect-error untyped font file
+ import font from '@fontsource-variable/ibm-plex-sans/files/ibm-plex-sans-latin-wght-normal.woff2';
+ 
+ export default createGlobalStyle`
++    :root {
++        --theme-primary: #4f8df9;
++        --theme-secondary: #0ea5e9;
++        --theme-accent: #22c55e;
++        --theme-bg: #0c1221;
++        --theme-surface: #141c2f;
++        --theme-card: #1d2740;
++        --theme-text: #ecf2ff;
++        --theme-muted: #9aa7c5;
++        --theme-border: #27344f;
++        --theme-radius: 14px;
++        --theme-font-family: 'IBM Plex Sans', Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
++        --theme-font-size: 15px;
++        --theme-line-height: 1.45;
++        --theme-heading-scale: 1.1;
++        --theme-font-weight: 500;
++        --theme-login-accent: #0ea5e9;
++        --theme-pixel-intensity: 0;
++    }
++
+     @font-face {
+         font-family: 'IBM Plex Sans';
+         font-style: normal;
+@@ -14,24 +33,57 @@ export default createGlobalStyle`
+     }
+ 
+     body {
+-        ${tw`font-sans bg-neutral-800 text-neutral-200`};
+-        letter-spacing: 0.015em;
++        font-family: var(--theme-font-family);
++        font-size: var(--theme-font-size);
++        line-height: var(--theme-line-height);
++        letter-spacing: 0.01em;
++        background: var(--theme-bg);
++        color: var(--theme-text);
++        transition: background 160ms ease, color 160ms ease;
++    }
++
++    body::before {
++        content: '';
++        position: fixed;
++        inset: 0;
++        pointer-events: none;
++        z-index: -1;
++        opacity: calc(var(--theme-pixel-intensity) * 0.45);
++        background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
++        background-size: 8px 8px;
++        display: none;
++    }
++
++    .theme-pixel body::before {
++        display: block;
+     }
+ 
+     h1, h2, h3, h4, h5, h6 {
+-        ${tw`font-medium tracking-normal font-header`};
++        color: var(--theme-text);
++        font-weight: var(--theme-font-weight);
++        letter-spacing: -0.01em;
++        line-height: 1.2;
+     }
+ 
++    h1 { font-size: calc(2rem * var(--theme-heading-scale)); }
++    h2 { font-size: calc(1.5rem * var(--theme-heading-scale)); }
++    h3 { font-size: calc(1.25rem * var(--theme-heading-scale)); }
++
+     p {
+-        ${tw`text-neutral-200 leading-snug font-sans`};
++        color: var(--theme-muted);
++        line-height: var(--theme-line-height);
++    }
++
++    a {
++        color: color-mix(in srgb, var(--theme-primary) 78%, white 22%);
+     }
+ 
+     form {
+-        ${tw`m-0`};
++        margin: 0;
+     }
+ 
+     textarea, select, input, button, button:focus, button:focus-visible {
+-        ${tw`outline-none`};
++        outline: none;
+     }
+ 
+     input[type=number]::-webkit-outer-spin-button,
+@@ -44,31 +96,47 @@ export default createGlobalStyle`
+         -moz-appearance: textfield !important;
+     }
+ 
+-    /* Scroll Bar Style */
++    .theme-shell {
++        min-height: 100vh;
++    }
++
++    .theme-compact p {
++        margin-bottom: 0.35rem;
++    }
++
++    .theme-dense .grid {
++        gap: 0.5rem !important;
++    }
++
++    @media (prefers-reduced-motion: reduce) {
++        * {
++            animation-duration: 0.01ms !important;
++            animation-iteration-count: 1 !important;
++            transition-duration: 0.01ms !important;
++            scroll-behavior: auto !important;
++        }
++    }
++
++    .theme-reduced-motion * {
++        animation: none !important;
++        transition: none !important;
++    }
++
+     ::-webkit-scrollbar {
+-        background: none;
+-        width: 16px;
+-        height: 16px;
++        background: transparent;
++        width: 12px;
++        height: 12px;
+     }
+ 
+     ::-webkit-scrollbar-thumb {
+-        border: solid 0 rgb(0 0 0 / 0%);
+-        border-right-width: 4px;
+-        border-left-width: 4px;
+-        -webkit-border-radius: 9px 4px;
+-        -webkit-box-shadow: inset 0 0 0 1px hsl(211, 10%, 53%), inset 0 0 0 4px hsl(209deg 18% 30%);
++        border-radius: 999px;
++        border: 3px solid transparent;
++        background-clip: padding-box;
++        background-color: color-mix(in srgb, var(--theme-border) 88%, black 12%);
+     }
+ 
+     ::-webkit-scrollbar-track-piece {
+-        margin: 4px 0;
+-    }
+-
+-    ::-webkit-scrollbar-thumb:horizontal {
+-        border-right-width: 0;
+-        border-left-width: 0;
+-        border-top-width: 4px;
+-        border-bottom-width: 4px;
+-        -webkit-border-radius: 4px 9px;
++        margin: 2px 0;
+     }
+ 
+     ::-webkit-scrollbar-corner {
+diff --git a/resources/scripts/assets/tailwind.css b/resources/scripts/assets/tailwind.css
+index b5c61c9..9c44edf 100644
+--- a/resources/scripts/assets/tailwind.css
++++ b/resources/scripts/assets/tailwind.css
+@@ -1,3 +1,5 @@
++@import './css/theme.css';
++
+ @tailwind base;
+ @tailwind components;
+ @tailwind utilities;
+diff --git a/resources/scripts/components/App.tsx b/resources/scripts/components/App.tsx
+index 9354000..be91e48 100644
+--- a/resources/scripts/components/App.tsx
++++ b/resources/scripts/components/App.tsx
+@@ -14,6 +14,7 @@ import AuthenticatedRoute from '@/components/elements/AuthenticatedRoute';
+ import { ServerContext } from '@/state/server';
+ import '@/assets/tailwind.css';
+ import Spinner from '@/components/elements/Spinner';
++import { ThemeProvider } from '@/context/ThemeContext';
+ 
+ const DashboardRouter = lazy(() => import(/* webpackChunkName: "dashboard" */ '@/routers/DashboardRouter'));
+ const ServerRouter = lazy(() => import(/* webpackChunkName: "server" */ '@/routers/ServerRouter'));
+@@ -60,33 +61,35 @@ const App = () => {
+         <>
+             <GlobalStylesheet />
+             <StoreProvider store={store}>
+-                <ProgressBar />
+-                <div css={tw`mx-auto w-auto`}>
+-                    <Router history={history}>
+-                        <Switch>
+-                            <Route path={'/auth'}>
+-                                <Spinner.Suspense>
+-                                    <AuthenticationRouter />
+-                                </Spinner.Suspense>
+-                            </Route>
+-                            <AuthenticatedRoute path={'/server/:id'}>
+-                                <Spinner.Suspense>
+-                                    <ServerContext.Provider>
+-                                        <ServerRouter />
+-                                    </ServerContext.Provider>
+-                                </Spinner.Suspense>
+-                            </AuthenticatedRoute>
+-                            <AuthenticatedRoute path={'/'}>
+-                                <Spinner.Suspense>
+-                                    <DashboardRouter />
+-                                </Spinner.Suspense>
+-                            </AuthenticatedRoute>
+-                            <Route path={'*'}>
+-                                <NotFound />
+-                            </Route>
+-                        </Switch>
+-                    </Router>
+-                </div>
++                <ThemeProvider>
++                    <ProgressBar />
++                    <div css={tw`mx-auto w-auto`} className={'theme-shell'}>
++                        <Router history={history}>
++                            <Switch>
++                                <Route path={'/auth'}>
++                                    <Spinner.Suspense>
++                                        <AuthenticationRouter />
++                                    </Spinner.Suspense>
++                                </Route>
++                                <AuthenticatedRoute path={'/server/:id'}>
++                                    <Spinner.Suspense>
++                                        <ServerContext.Provider>
++                                            <ServerRouter />
++                                        </ServerContext.Provider>
++                                    </Spinner.Suspense>
++                                </AuthenticatedRoute>
++                                <AuthenticatedRoute path={'/'}>
++                                    <Spinner.Suspense>
++                                        <DashboardRouter />
++                                    </Spinner.Suspense>
++                                </AuthenticatedRoute>
++                                <Route path={'*'}>
++                                    <NotFound />
++                                </Route>
++                            </Switch>
++                        </Router>
++                    </div>
++                </ThemeProvider>
+             </StoreProvider>
+         </>
+     );
+diff --git a/resources/scripts/components/MessageBox.tsx b/resources/scripts/components/MessageBox.tsx
+index 57a5cac..8b3751a 100644
+--- a/resources/scripts/components/MessageBox.tsx
++++ b/resources/scripts/components/MessageBox.tsx
+@@ -1,5 +1,5 @@
+ import * as React from 'react';
+-import tw, { TwStyle } from 'twin.macro';
++import tw from 'twin.macro';
+ import styled from 'styled-components/macro';
+ 
+ export type FlashMessageType = 'success' | 'info' | 'warning' | 'error';
+@@ -10,39 +10,33 @@ interface Props {
+     type?: FlashMessageType;
+ }
+ 
+-const styling = (type?: FlashMessageType): TwStyle | string => {
++const palette = (type?: FlashMessageType) => {
+     switch (type) {
+         case 'error':
+-            return tw`bg-red-600 border-red-800`;
++            return { border: '#ef4444', background: 'rgba(239, 68, 68, 0.16)' };
+         case 'info':
+-            return tw`bg-primary-600 border-primary-800`;
++            return {
++                border: 'var(--theme-primary)',
++                background: 'color-mix(in srgb, var(--theme-primary) 22%, transparent)',
++            };
+         case 'success':
+-            return tw`bg-green-600 border-green-800`;
++            return { border: '#22c55e', background: 'rgba(34, 197, 94, 0.16)' };
+         case 'warning':
+-            return tw`bg-yellow-600 border-yellow-800`;
++            return { border: '#f59e0b', background: 'rgba(245, 158, 11, 0.2)' };
+         default:
+-            return '';
+-    }
+-};
+-
+-const getBackground = (type?: FlashMessageType): TwStyle | string => {
+-    switch (type) {
+-        case 'error':
+-            return tw`bg-red-500`;
+-        case 'info':
+-            return tw`bg-primary-500`;
+-        case 'success':
+-            return tw`bg-green-500`;
+-        case 'warning':
+-            return tw`bg-yellow-500`;
+-        default:
+-            return '';
++            return {
++                border: 'var(--theme-border)',
++                background: 'color-mix(in srgb, var(--theme-card) 85%, transparent)',
++            };
+     }
+ };
+ 
+ const Container = styled.div<{ $type?: FlashMessageType }>`
+-    ${tw`p-2 border items-center leading-normal rounded flex w-full text-sm text-white`};
+-    ${(props) => styling(props.$type)};
++    ${tw`p-3 border items-start leading-normal rounded flex w-full text-sm`};
++    border-color: ${(props) => palette(props.$type).border};
++    background: ${(props) => palette(props.$type).background};
++    color: var(--theme-text);
++    border-radius: var(--theme-radius);
+ `;
+ Container.displayName = 'MessageBox.Container';
+ 
+@@ -51,10 +45,11 @@ const MessageBox = ({ title, children, type }: Props) => (
+         {title && (
+             <span
+                 className={'title'}
+-                css={[
+-                    tw`flex rounded-full uppercase px-2 py-1 text-xs font-bold mr-3 leading-none`,
+-                    getBackground(type),
+-                ]}
++                css={tw`flex rounded-full uppercase px-2 py-1 text-xs font-bold mr-3 leading-none`}
++                style={{
++                    color: '#fff',
++                    background: palette(type).border,
++                }}
+             >
+                 {title}
+             </span>
+diff --git a/resources/scripts/components/NavigationBar.tsx b/resources/scripts/components/NavigationBar.tsx
+index 6142f62..0e96dac 100644
+--- a/resources/scripts/components/NavigationBar.tsx
++++ b/resources/scripts/components/NavigationBar.tsx
+@@ -2,33 +2,49 @@ import * as React from 'react';
+ import { useState } from 'react';
+ import { Link, NavLink } from 'react-router-dom';
+ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+-import { faCogs, faLayerGroup, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
++import {
++    faBars,
++    faCogs,
++    faDesktop,
++    faLayerGroup,
++    faMoon,
++    faSignOutAlt,
++    faSun,
++    faTimes,
++} from '@fortawesome/free-solid-svg-icons';
+ import { useStoreState } from 'easy-peasy';
+ import { ApplicationStore } from '@/state';
+ import SearchContainer from '@/components/dashboard/search/SearchContainer';
+-import tw, { theme } from 'twin.macro';
+ import styled from 'styled-components/macro';
+ import http from '@/api/http';
+ import SpinnerOverlay from '@/components/elements/SpinnerOverlay';
+ import Tooltip from '@/components/elements/tooltip/Tooltip';
+ import Avatar from '@/components/Avatar';
++import { useTheme } from '@/context/ThemeContext';
+ 
+ const RightNavigation = styled.div`
+     & > a,
+     & > button,
+     & > .navigation-link {
+-        ${tw`flex items-center h-full no-underline text-neutral-300 px-6 cursor-pointer transition-all duration-150`};
+-
+-        &:active,
+-        &:hover {
+-            ${tw`text-neutral-100 bg-black`};
+-        }
++        display: inline-flex;
++        align-items: center;
++        justify-content: center;
++        min-width: 2.5rem;
++        height: 2.5rem;
++        border-radius: 999px;
++        border: 1px solid transparent;
++        color: var(--theme-muted);
++        transition: all 150ms ease;
++        background: transparent;
++    }
+ 
+-        &:active,
+-        &:hover,
+-        &.active {
+-            box-shadow: inset 0 -2px ${theme`colors.cyan.600`.toString()};
+-        }
++    & > a:hover,
++    & > button:hover,
++    & > .navigation-link:hover,
++    & > a.active {
++        color: var(--theme-text);
++        border-color: color-mix(in srgb, var(--theme-primary) 45%, var(--theme-border));
++        background: color-mix(in srgb, var(--theme-primary) 15%, transparent);
+     }
+ `;
+ 
+@@ -36,6 +52,8 @@ export default () => {
+     const name = useStoreState((state: ApplicationStore) => state.settings.data!.name);
+     const rootAdmin = useStoreState((state: ApplicationStore) => state.user.data!.rootAdmin);
+     const [isLoggingOut, setIsLoggingOut] = useState(false);
++    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
++    const { mode, setMode, canSwitchMode } = useTheme();
+ 
+     const onTriggerLogout = () => {
+         setIsLoggingOut(true);
+@@ -45,48 +63,105 @@ export default () => {
+         });
+     };
+ 
++    const nextMode = mode === 'dark' ? 'light' : mode === 'light' ? 'system' : 'dark';
++
+     return (
+-        <div className={'w-full bg-neutral-900 shadow-md overflow-x-auto'}>
++        <div className={'w-full theme-nav sticky top-0 z-30'}>
+             <SpinnerOverlay visible={isLoggingOut} />
+-            <div className={'mx-auto w-full flex items-center h-[3.5rem] max-w-[1200px]'}>
+-                <div id={'logo'} className={'flex-1'}>
++            <div className={'mx-auto w-full max-w-[1200px] px-3 sm:px-4 py-2 flex items-center gap-3'}>
++                <button
++                    type={'button'}
++                    className={
++                        'sm:hidden h-10 w-10 rounded-full border border-[var(--theme-border)] text-[var(--theme-muted)]'
++                    }
++                    onClick={() => setMobileMenuOpen((state) => !state)}
++                    aria-label={'Toggle navigation menu'}
++                >
++                    <FontAwesomeIcon icon={mobileMenuOpen ? faTimes : faBars} />
++                </button>
++                <div id={'logo'} className={'flex-1 min-w-0'}>
+                     <Link
+                         to={'/'}
+                         className={
+-                            'text-2xl font-header font-medium px-4 no-underline text-neutral-200 hover:text-neutral-100 transition-colors duration-150'
++                            'text-xl sm:text-2xl font-semibold no-underline text-[var(--theme-text)] truncate block'
+                         }
+                     >
+                         {name}
+                     </Link>
+                 </div>
+-                <RightNavigation className={'flex h-full items-center justify-center'}>
++                <RightNavigation className={'hidden sm:flex h-full items-center justify-center gap-2'}>
+                     <SearchContainer />
+                     <Tooltip placement={'bottom'} content={'Dashboard'}>
+-                        <NavLink to={'/'} exact>
++                        <NavLink className={'theme-nav-link'} to={'/'} exact>
+                             <FontAwesomeIcon icon={faLayerGroup} />
+                         </NavLink>
+                     </Tooltip>
+                     {rootAdmin && (
+                         <Tooltip placement={'bottom'} content={'Admin'}>
+-                            <a href={'/admin'} rel={'noreferrer'}>
++                            <a href={'/admin'} rel={'noreferrer'} className={'theme-nav-link'}>
+                                 <FontAwesomeIcon icon={faCogs} />
+                             </a>
+                         </Tooltip>
+                     )}
++                    {canSwitchMode && (
++                        <Tooltip placement={'bottom'} content={`Theme: ${mode}`}>
++                            <button className={'theme-nav-link'} type={'button'} onClick={() => setMode(nextMode)}>
++                                <FontAwesomeIcon
++                                    icon={mode === 'dark' ? faMoon : mode === 'light' ? faSun : faDesktop}
++                                />
++                            </button>
++                        </Tooltip>
++                    )}
+                     <Tooltip placement={'bottom'} content={'Account Settings'}>
+-                        <NavLink to={'/account'}>
++                        <NavLink className={'theme-nav-link'} to={'/account'}>
+                             <span className={'flex items-center w-5 h-5'}>
+                                 <Avatar.User />
+                             </span>
+                         </NavLink>
+                     </Tooltip>
+                     <Tooltip placement={'bottom'} content={'Sign Out'}>
+-                        <button onClick={onTriggerLogout}>
++                        <button className={'theme-nav-link'} onClick={onTriggerLogout}>
+                             <FontAwesomeIcon icon={faSignOutAlt} />
+                         </button>
+                     </Tooltip>
+                 </RightNavigation>
+             </div>
++            {mobileMenuOpen && (
++                <div className={'sm:hidden border-t border-[var(--theme-border)] px-4 pb-4 flex flex-col gap-2'}>
++                    <NavLink
++                        onClick={() => setMobileMenuOpen(false)}
++                        className={'theme-nav-link px-4 py-2'}
++                        to={'/'}
++                        exact
++                    >
++                        Dashboard
++                    </NavLink>
++                    <NavLink
++                        onClick={() => setMobileMenuOpen(false)}
++                        className={'theme-nav-link px-4 py-2'}
++                        to={'/account'}
++                    >
++                        Account
++                    </NavLink>
++                    {rootAdmin && (
++                        <a className={'theme-nav-link px-4 py-2'} href={'/admin'}>
++                            Admin
++                        </a>
++                    )}
++                    {canSwitchMode && (
++                        <button
++                            className={'theme-nav-link px-4 py-2 text-left'}
++                            type={'button'}
++                            onClick={() => setMode(nextMode)}
++                        >
++                            Switch theme mode ({mode})
++                        </button>
++                    )}
++                    <button className={'theme-nav-link px-4 py-2 text-left'} type={'button'} onClick={onTriggerLogout}>
++                        Sign out
++                    </button>
++                </div>
++            )}
+         </div>
+     );
+ };
+diff --git a/resources/scripts/components/auth/ForgotPasswordContainer.tsx b/resources/scripts/components/auth/ForgotPasswordContainer.tsx
+index 76ddf19..e838871 100644
+--- a/resources/scripts/components/auth/ForgotPasswordContainer.tsx
++++ b/resources/scripts/components/auth/ForgotPasswordContainer.tsx
+@@ -8,7 +8,6 @@ import { useStoreState } from 'easy-peasy';
+ import Field from '@/components/elements/Field';
+ import { Formik, FormikHelpers } from 'formik';
+ import { object, string } from 'yup';
+-import tw from 'twin.macro';
+ import Button from '@/components/elements/Button';
+ import Reaptcha from 'reaptcha';
+ import useFlash from '@/plugins/useFlash';
+@@ -31,8 +30,6 @@ export default () => {
+     const handleSubmission = ({ email }: Values, { setSubmitting, resetForm }: FormikHelpers<Values>) => {
+         clearFlashes();
+ 
+-        // If there is no token in the state yet, request the token and then abort this submit request
+-        // since it will be re-submitted when the recaptcha data is returned by the component.
+         if (recaptchaEnabled && !token) {
+             ref.current!.execute().catch((error) => {
+                 console.error(error);
+@@ -47,7 +44,7 @@ export default () => {
+         requestPasswordResetEmail(email, token)
+             .then((response) => {
+                 resetForm();
+-                addFlash({ type: 'success', title: 'Success', message: response });
++                addFlash({ type: 'success', title: 'Email sent', message: response });
+             })
+             .catch((error) => {
+                 console.error(error);
+@@ -72,19 +69,20 @@ export default () => {
+             })}
+         >
+             {({ isSubmitting, setSubmitting, submitForm }) => (
+-                <LoginFormContainer title={'Request Password Reset'} css={tw`w-full flex`}>
++                <LoginFormContainer
++                    title={'Reset password'}
++                    subtitle={'We will email secure reset instructions to your inbox.'}
++                >
+                     <Field
+                         light
+-                        label={'Email'}
+-                        description={
+-                            'Enter your account email address to receive instructions on resetting your password.'
+-                        }
++                        label={'Email address'}
++                        description={'Enter the email tied to your account.'}
+                         name={'email'}
+                         type={'email'}
+                     />
+-                    <div css={tw`mt-6`}>
++                    <div className={'mt-6'}>
+                         <Button type={'submit'} size={'xlarge'} disabled={isSubmitting} isLoading={isSubmitting}>
+-                            Send Email
++                            Send reset link
+                         </Button>
+                     </div>
+                     {recaptchaEnabled && (
+@@ -102,11 +100,8 @@ export default () => {
+                             }}
+                         />
+                     )}
+-                    <div css={tw`mt-6 text-center`}>
+-                        <Link
+-                            to={'/auth/login'}
+-                            css={tw`text-xs text-neutral-500 tracking-wide uppercase no-underline hover:text-neutral-700`}
+-                        >
++                    <div className={'mt-6 text-center'}>
++                        <Link to={'/auth/login'} className={'text-xs theme-page-footer uppercase tracking-wide'}>
+                             Return to Login
+                         </Link>
+                     </div>
+diff --git a/resources/scripts/components/auth/LoginCheckpointContainer.tsx b/resources/scripts/components/auth/LoginCheckpointContainer.tsx
+index 66a6fb8..e79dcf2 100644
+--- a/resources/scripts/components/auth/LoginCheckpointContainer.tsx
++++ b/resources/scripts/components/auth/LoginCheckpointContainer.tsx
+@@ -8,12 +8,11 @@ import { useFormikContext, withFormik } from 'formik';
+ import useFlash from '@/plugins/useFlash';
+ import { FlashStore } from '@/state/flashes';
+ import Field from '@/components/elements/Field';
+-import tw from 'twin.macro';
+ import Button from '@/components/elements/Button';
+ 
+ interface Values {
+     code: string;
+-    recoveryCode: '';
++    recoveryCode: string;
+ }
+ 
+ type OwnProps = RouteComponentProps<Record<string, string | undefined>, StaticContext, { token?: string }>;
+@@ -27,44 +26,49 @@ const LoginCheckpointContainer = () => {
+     const [isMissingDevice, setIsMissingDevice] = useState(false);
+ 
+     return (
+-        <LoginFormContainer title={'Device Checkpoint'} css={tw`w-full flex`}>
+-            <div css={tw`mt-6`}>
++        <LoginFormContainer
++            title={'Two-factor checkpoint'}
++            subtitle={
++                isMissingDevice
++                    ? 'Use one of your recovery codes to continue.'
++                    : 'Enter the one-time code from your authenticator app.'
++            }
++        >
++            <div className={'mt-4'}>
+                 <Field
+                     light
+                     name={isMissingDevice ? 'recoveryCode' : 'code'}
+-                    title={isMissingDevice ? 'Recovery Code' : 'Authentication Code'}
++                    label={isMissingDevice ? 'Recovery Code' : 'Authentication Code'}
+                     description={
+                         isMissingDevice
+-                            ? 'Enter one of the recovery codes generated when you setup 2-Factor authentication on this account in order to continue.'
+-                            : 'Enter the two-factor token generated by your device.'
++                            ? 'Recovery codes are generated when two-factor auth is enabled.'
++                            : 'The code refreshes every 30 seconds in your authenticator app.'
+                     }
+                     type={'text'}
+                     autoComplete={'one-time-code'}
+                     autoFocus
+                 />
+             </div>
+-            <div css={tw`mt-6`}>
++            <div className={'mt-6'}>
+                 <Button size={'xlarge'} type={'submit'} disabled={isSubmitting} isLoading={isSubmitting}>
+                     Continue
+                 </Button>
+             </div>
+-            <div css={tw`mt-6 text-center`}>
+-                <span
++            <div className={'mt-6 text-center'}>
++                <button
++                    type={'button'}
+                     onClick={() => {
+                         setFieldValue('code', '');
+                         setFieldValue('recoveryCode', '');
+-                        setIsMissingDevice((s) => !s);
++                        setIsMissingDevice((state) => !state);
+                     }}
+-                    css={tw`cursor-pointer text-xs text-neutral-500 tracking-wide uppercase no-underline hover:text-neutral-700`}
++                    className={'text-xs theme-page-footer uppercase tracking-wide hover:text-[var(--theme-text)]'}
+                 >
+-                    {!isMissingDevice ? "I've Lost My Device" : 'I Have My Device'}
+-                </span>
++                    {!isMissingDevice ? "I've lost my device" : 'I have my device'}
++                </button>
+             </div>
+-            <div css={tw`mt-6 text-center`}>
+-                <Link
+-                    to={'/auth/login'}
+-                    css={tw`text-xs text-neutral-500 tracking-wide uppercase no-underline hover:text-neutral-700`}
+-                >
++            <div className={'mt-4 text-center'}>
++                <Link to={'/auth/login'} className={'text-xs theme-page-footer uppercase tracking-wide'}>
+                     Return to Login
+                 </Link>
+             </div>
+diff --git a/resources/scripts/components/auth/LoginContainer.tsx b/resources/scripts/components/auth/LoginContainer.tsx
+index 453a27e..2f3b752 100644
+--- a/resources/scripts/components/auth/LoginContainer.tsx
++++ b/resources/scripts/components/auth/LoginContainer.tsx
+@@ -6,7 +6,6 @@ import { useStoreState } from 'easy-peasy';
+ import { Formik, FormikHelpers } from 'formik';
+ import { object, string } from 'yup';
+ import Field from '@/components/elements/Field';
+-import tw from 'twin.macro';
+ import Button from '@/components/elements/Button';
+ import Reaptcha from 'reaptcha';
+ import useFlash from '@/plugins/useFlash';
+@@ -19,6 +18,7 @@ interface Values {
+ const LoginContainer = ({ history }: RouteComponentProps) => {
+     const ref = useRef<Reaptcha>(null);
+     const [token, setToken] = useState('');
++    const [showPassword, setShowPassword] = useState(false);
+ 
+     const { clearFlashes, clearAndAddHttpError } = useFlash();
+     const { enabled: recaptchaEnabled, siteKey } = useStoreState((state) => state.settings.data!.recaptcha);
+@@ -30,8 +30,6 @@ const LoginContainer = ({ history }: RouteComponentProps) => {
+     const onSubmit = (values: Values, { setSubmitting }: FormikHelpers<Values>) => {
+         clearFlashes();
+ 
+-        // If there is no token in the state yet, request the token and then abort this submit request
+-        // since it will be re-submitted when the recaptcha data is returned by the component.
+         if (recaptchaEnabled && !token) {
+             ref.current!.execute().catch((error) => {
+                 console.error(error);
+@@ -55,7 +53,6 @@ const LoginContainer = ({ history }: RouteComponentProps) => {
+             })
+             .catch((error) => {
+                 console.error(error);
+-
+                 setToken('');
+                 if (ref.current) ref.current.reset();
+ 
+@@ -74,14 +71,37 @@ const LoginContainer = ({ history }: RouteComponentProps) => {
+             })}
+         >
+             {({ isSubmitting, setSubmitting, submitForm }) => (
+-                <LoginFormContainer title={'Login to Continue'} css={tw`w-full flex`}>
+-                    <Field light type={'text'} label={'Username or Email'} name={'username'} disabled={isSubmitting} />
+-                    <div css={tw`mt-6`}>
+-                        <Field light type={'password'} label={'Password'} name={'password'} disabled={isSubmitting} />
++                <LoginFormContainer title={'Sign in'} subtitle={'Secure access to your hosting control panel.'}>
++                    <Field
++                        light
++                        type={'text'}
++                        label={'Username or Email'}
++                        name={'username'}
++                        disabled={isSubmitting}
++                        autoFocus
++                    />
++                    <div className={'mt-4'}>
++                        <Field
++                            light
++                            type={showPassword ? 'text' : 'password'}
++                            label={'Password'}
++                            name={'password'}
++                            disabled={isSubmitting}
++                            autoComplete={'current-password'}
++                        />
+                     </div>
+-                    <div css={tw`mt-6`}>
++                    <div className={'mt-2 flex justify-end'}>
++                        <button
++                            type={'button'}
++                            className={'text-xs theme-page-footer hover:text-[var(--theme-text)] transition-colors'}
++                            onClick={() => setShowPassword((state) => !state)}
++                        >
++                            {showPassword ? 'Hide password' : 'Show password'}
++                        </button>
++                    </div>
++                    <div className={'mt-6'}>
+                         <Button type={'submit'} size={'xlarge'} isLoading={isSubmitting} disabled={isSubmitting}>
+-                            Login
++                            {isSubmitting ? 'Signing in...' : 'Login'}
+                         </Button>
+                     </div>
+                     {recaptchaEnabled && (
+@@ -99,11 +119,8 @@ const LoginContainer = ({ history }: RouteComponentProps) => {
+                             }}
+                         />
+                     )}
+-                    <div css={tw`mt-6 text-center`}>
+-                        <Link
+-                            to={'/auth/password'}
+-                            css={tw`text-xs text-neutral-500 tracking-wide no-underline uppercase hover:text-neutral-600`}
+-                        >
++                    <div className={'mt-6 text-center'}>
++                        <Link to={'/auth/password'} className={'text-xs theme-page-footer uppercase tracking-wide'}>
+                             Forgot password?
+                         </Link>
+                     </div>
+diff --git a/resources/scripts/components/auth/LoginFormContainer.tsx b/resources/scripts/components/auth/LoginFormContainer.tsx
+index 6274981..889e12b 100644
+--- a/resources/scripts/components/auth/LoginFormContainer.tsx
++++ b/resources/scripts/components/auth/LoginFormContainer.tsx
+@@ -1,55 +1,44 @@
+ import React, { forwardRef } from 'react';
+ import { Form } from 'formik';
+-import styled from 'styled-components/macro';
+-import { breakpoint } from '@/theme';
+ import FlashMessageRender from '@/components/FlashMessageRender';
+-import tw from 'twin.macro';
++import { useStoreState } from 'easy-peasy';
++import { ApplicationStore } from '@/state';
+ 
+ type Props = React.DetailedHTMLProps<React.FormHTMLAttributes<HTMLFormElement>, HTMLFormElement> & {
+     title?: string;
++    subtitle?: string;
+ };
+ 
+-const Container = styled.div`
+-    ${breakpoint('sm')`
+-        ${tw`w-4/5 mx-auto`}
+-    `};
++export default forwardRef<HTMLFormElement, Props>(({ title, subtitle, ...props }, ref) => {
++    const theme = useStoreState((state: ApplicationStore) => state.settings.data!.theme);
+ 
+-    ${breakpoint('md')`
+-        ${tw`p-10`}
+-    `};
+-
+-    ${breakpoint('lg')`
+-        ${tw`w-3/5`}
+-    `};
+-
+-    ${breakpoint('xl')`
+-        ${tw`w-full`}
+-        max-width: 700px;
+-    `};
+-`;
+-
+-export default forwardRef<HTMLFormElement, Props>(({ title, ...props }, ref) => (
+-    <Container>
+-        {title && <h2 css={tw`text-3xl text-center text-neutral-100 font-medium py-4`}>{title}</h2>}
+-        <FlashMessageRender css={tw`mb-2 px-1`} />
+-        <Form {...props} ref={ref}>
+-            <div css={tw`md:flex w-full bg-white shadow-lg rounded-lg p-6 md:pl-0 mx-1`}>
+-                <div css={tw`flex-none select-none mb-6 md:mb-0 self-center`}>
+-                    <img src={'/assets/svgs/pterodactyl.svg'} css={tw`block w-48 md:w-64 mx-auto`} />
++    return (
++        <div className={'theme-auth-layout'}>
++            <Form {...props} ref={ref}>
++                <div className={'auth-grid'}>
++                    <aside className={'theme-auth-brand'}>
++                        {!!theme.login.logo && (
++                            <img src={theme.login.logo} alt={theme.brandName} className={'h-10 mb-8'} />
++                        )}
++                        <h1 className={'text-3xl font-semibold leading-tight'}>{theme.brandName}</h1>
++                        <p className={'mt-3 text-sm'}>{theme.brandDescription}</p>
++                        <div className={'mt-8 text-xs text-neutral-400'}>
++                            Theme: {theme.themeName} v{theme.version}
++                        </div>
++                    </aside>
++                    <div className={'p-6 md:p-10'}>
++                        {title && (
++                            <h2 className={'text-2xl md:text-3xl font-semibold text-[var(--theme-text)]'}>{title}</h2>
++                        )}
++                        <p className={'mt-2 mb-6 text-sm'}>{subtitle || theme.login.description}</p>
++                        <FlashMessageRender className={'mb-4'} />
++                        {props.children}
++                        <p className={'text-center text-xs mt-8 theme-page-footer'}>
++                            &copy; 2015 - {new Date().getFullYear()} Pterodactyl · {theme.themeName}
++                        </p>
++                    </div>
+                 </div>
+-                <div css={tw`flex-1`}>{props.children}</div>
+-            </div>
+-        </Form>
+-        <p css={tw`text-center text-neutral-500 text-xs mt-4`}>
+-            &copy; 2015 - {new Date().getFullYear()}&nbsp;
+-            <a
+-                rel={'noopener nofollow noreferrer'}
+-                href={'https://pterodactyl.io'}
+-                target={'_blank'}
+-                css={tw`no-underline text-neutral-500 hover:text-neutral-300`}
+-            >
+-                Pterodactyl Software
+-            </a>
+-        </p>
+-    </Container>
+-));
++            </Form>
++        </div>
++    );
++});
+diff --git a/resources/scripts/components/auth/ResetPasswordContainer.tsx b/resources/scripts/components/auth/ResetPasswordContainer.tsx
+index 86f95ab..cbe47a4 100644
+--- a/resources/scripts/components/auth/ResetPasswordContainer.tsx
++++ b/resources/scripts/components/auth/ResetPasswordContainer.tsx
+@@ -10,7 +10,6 @@ import { Formik, FormikHelpers } from 'formik';
+ import { object, ref, string } from 'yup';
+ import Field from '@/components/elements/Field';
+ import Input from '@/components/elements/Input';
+-import tw from 'twin.macro';
+ import Button from '@/components/elements/Button';
+ 
+ interface Values {
+@@ -20,6 +19,7 @@ interface Values {
+ 
+ export default ({ match, location }: RouteComponentProps<{ token: string }>) => {
+     const [email, setEmail] = useState('');
++    const [showPassword, setShowPassword] = useState(false);
+ 
+     const { clearFlashes, addFlash } = useStoreActions((actions: Actions<ApplicationStore>) => actions.flashes);
+ 
+@@ -30,6 +30,7 @@ export default ({ match, location }: RouteComponentProps<{ token: string }>) =>
+ 
+     const submit = ({ password, passwordConfirmation }: Values, { setSubmitting }: FormikHelpers<Values>) => {
+         clearFlashes();
++
+         performPasswordReset(email, { token: match.params.token, password, passwordConfirmation })
+             .then(() => {
+                 // @ts-expect-error this is valid
+@@ -61,33 +62,47 @@ export default ({ match, location }: RouteComponentProps<{ token: string }>) =>
+             })}
+         >
+             {({ isSubmitting }) => (
+-                <LoginFormContainer title={'Reset Password'} css={tw`w-full flex`}>
++                <LoginFormContainer
++                    title={'Choose a new password'}
++                    subtitle={'Set a strong password and continue to your panel.'}
++                >
+                     <div>
+                         <label>Email</label>
+                         <Input value={email} isLight disabled />
+                     </div>
+-                    <div css={tw`mt-6`}>
++                    <div className={'mt-4'}>
+                         <Field
+                             light
+                             label={'New Password'}
+                             name={'password'}
+-                            type={'password'}
++                            type={showPassword ? 'text' : 'password'}
+                             description={'Passwords must be at least 8 characters in length.'}
+                         />
+                     </div>
+-                    <div css={tw`mt-6`}>
+-                        <Field light label={'Confirm New Password'} name={'passwordConfirmation'} type={'password'} />
++                    <div className={'mt-4'}>
++                        <Field
++                            light
++                            label={'Confirm New Password'}
++                            name={'passwordConfirmation'}
++                            type={showPassword ? 'text' : 'password'}
++                        />
+                     </div>
+-                    <div css={tw`mt-6`}>
++                    <div className={'mt-2 flex justify-end'}>
++                        <button
++                            type={'button'}
++                            className={'text-xs theme-page-footer hover:text-[var(--theme-text)] transition-colors'}
++                            onClick={() => setShowPassword((state) => !state)}
++                        >
++                            {showPassword ? 'Hide passwords' : 'Show passwords'}
++                        </button>
++                    </div>
++                    <div className={'mt-6'}>
+                         <Button size={'xlarge'} type={'submit'} disabled={isSubmitting} isLoading={isSubmitting}>
+                             Reset Password
+                         </Button>
+                     </div>
+-                    <div css={tw`mt-6 text-center`}>
+-                        <Link
+-                            to={'/auth/login'}
+-                            css={tw`text-xs text-neutral-500 tracking-wide no-underline uppercase hover:text-neutral-600`}
+-                        >
++                    <div className={'mt-6 text-center'}>
++                        <Link to={'/auth/login'} className={'text-xs theme-page-footer uppercase tracking-wide'}>
+                             Return to Login
+                         </Link>
+                     </div>
+diff --git a/resources/scripts/components/dashboard/DashboardContainer.tsx b/resources/scripts/components/dashboard/DashboardContainer.tsx
+index 23ad2e3..c3e53e5 100644
+--- a/resources/scripts/components/dashboard/DashboardContainer.tsx
++++ b/resources/scripts/components/dashboard/DashboardContainer.tsx
+@@ -1,4 +1,4 @@
+-import React, { useEffect, useState } from 'react';
++import React, { useEffect, useMemo, useState } from 'react';
+ import { Server } from '@/api/server/getServer';
+ import getServers from '@/api/getServers';
+ import ServerRow from '@/components/dashboard/ServerRow';
+@@ -8,21 +8,41 @@ import useFlash from '@/plugins/useFlash';
+ import { useStoreState } from 'easy-peasy';
+ import { usePersistedState } from '@/plugins/usePersistedState';
+ import Switch from '@/components/elements/Switch';
+-import tw from 'twin.macro';
+ import useSWR from 'swr';
+ import { PaginatedResult } from '@/api/http';
+ import Pagination from '@/components/elements/Pagination';
+ import { useLocation } from 'react-router-dom';
++import Input from '@/components/elements/Input';
++import Select from '@/components/elements/Select';
+ 
+-export default () => {
++type SortOrder = 'name' | 'status' | 'identifier';
++type Layout = 'grid' | 'list';
++
++const serverSort = (sortBy: SortOrder) => (left: Server, right: Server) => {
++    switch (sortBy) {
++        case 'status':
++            return (left.status || '').localeCompare(right.status || '');
++        case 'identifier':
++            return (left.identifier || '').localeCompare(right.identifier || '');
++        default:
++            return left.name.localeCompare(right.name);
++    }
++};
++
++const DashboardContainer = () => {
+     const { search } = useLocation();
+     const defaultPage = Number(new URLSearchParams(search).get('page') || '1');
+ 
+     const [page, setPage] = useState(!isNaN(defaultPage) && defaultPage > 0 ? defaultPage : 1);
++    const [query, setQuery] = useState('');
++    const [statusFilter, setStatusFilter] = useState<'all' | 'running' | 'offline' | 'suspended'>('all');
++    const [sortBy, setSortBy] = useState<SortOrder>('name');
++
+     const { clearFlashes, clearAndAddHttpError } = useFlash();
+     const uuid = useStoreState((state) => state.user.data!.uuid);
+     const rootAdmin = useStoreState((state) => state.user.data!.rootAdmin);
+     const [showOnlyAdmin, setShowOnlyAdmin] = usePersistedState(`${uuid}:show_all_servers`, false);
++    const [layout, setLayout] = usePersistedState<Layout>(`${uuid}:dashboard_layout`, 'grid');
+ 
+     const { data: servers, error } = useSWR<PaginatedResult<Server>>(
+         ['/api/client/servers', showOnlyAdmin && rootAdmin, page],
+@@ -41,9 +61,6 @@ export default () => {
+     }, [servers?.pagination.currentPage]);
+ 
+     useEffect(() => {
+-        // Don't use react-router to handle changing this part of the URL, otherwise it
+-        // triggers a needless re-render. We just want to track this in the URL incase the
+-        // user refreshes the page.
+         window.history.replaceState(null, document.title, `/${page <= 1 ? '' : `?page=${page}`}`);
+     }, [page]);
+ 
+@@ -52,39 +69,143 @@ export default () => {
+         if (!error) clearFlashes('dashboard');
+     }, [error]);
+ 
++    const normalizedQuery = query.trim().toLowerCase();
++
++    const getFiltered = (items: Server[]) => {
++        return items
++            .filter((server) => {
++                if (statusFilter !== 'all' && (server.status || 'offline') !== statusFilter) return false;
++                if (!normalizedQuery) return true;
++
++                const searchable = `${server.name} ${server.identifier} ${server.description || ''}`.toLowerCase();
++                return searchable.includes(normalizedQuery);
++            })
++            .sort(serverSort(sortBy));
++    };
++
++    const skeletonCards = useMemo(
++        () =>
++            Array.from({ length: 6 }).map((_, index) => (
++                <div key={index} className={'theme-card p-4 animate-pulse'}>
++                    <div className={'h-5 rounded bg-white/10 w-2/3 mb-4'} />
++                    <div className={'h-3 rounded bg-white/10 w-full mb-2'} />
++                    <div className={'h-3 rounded bg-white/10 w-5/6'} />
++                </div>
++            )),
++        []
++    );
++
+     return (
+         <PageContentBlock title={'Dashboard'} showFlashKey={'dashboard'}>
+-            {rootAdmin && (
+-                <div css={tw`mb-2 flex justify-end items-center`}>
+-                    <p css={tw`uppercase text-xs text-neutral-400 mr-2`}>
+-                        {showOnlyAdmin ? "Showing others' servers" : 'Showing your servers'}
+-                    </p>
+-                    <Switch
+-                        name={'show_all_servers'}
+-                        defaultChecked={showOnlyAdmin}
+-                        onChange={() => setShowOnlyAdmin((s) => !s)}
++            <section className={'theme-card p-4 sm:p-5 mb-4'}>
++                <div className={'flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'}>
++                    <div>
++                        <h1 className={'text-2xl font-semibold text-[var(--theme-text)]'}>Your Servers</h1>
++                        <p className={'text-sm mt-1'}>Search, filter, and manage your infrastructure from one place.</p>
++                    </div>
++                    <div className={'flex flex-wrap gap-2'}>
++                        <button
++                            type={'button'}
++                            onClick={() => setLayout('grid')}
++                            className={`theme-nav-link px-3 py-2 ${layout === 'grid' ? 'active' : ''}`}
++                        >
++                            Grid
++                        </button>
++                        <button
++                            type={'button'}
++                            onClick={() => setLayout('list')}
++                            className={`theme-nav-link px-3 py-2 ${layout === 'list' ? 'active' : ''}`}
++                        >
++                            List
++                        </button>
++                    </div>
++                </div>
++                <div className={'grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4'}>
++                    <Input
++                        className={'md:col-span-2 xl:col-span-2'}
++                        placeholder={'Search servers by name or identifier...'}
++                        value={query}
++                        onChange={(event) => setQuery(event.currentTarget.value)}
+                     />
++                    <Select
++                        value={statusFilter}
++                        onChange={(event) => setStatusFilter(event.currentTarget.value as typeof statusFilter)}
++                    >
++                        <option value={'all'}>All Statuses</option>
++                        <option value={'running'}>Running</option>
++                        <option value={'offline'}>Offline</option>
++                        <option value={'suspended'}>Suspended</option>
++                    </Select>
++                    <Select value={sortBy} onChange={(event) => setSortBy(event.currentTarget.value as SortOrder)}>
++                        <option value={'name'}>Sort by Name</option>
++                        <option value={'identifier'}>Sort by Identifier</option>
++                        <option value={'status'}>Sort by Status</option>
++                    </Select>
++                    {rootAdmin && (
++                        <label
++                            className={
++                                'flex items-center justify-between rounded-md border border-[var(--theme-border)] px-3'
++                            }
++                        >
++                            <span className={'text-xs uppercase tracking-wide text-[var(--theme-muted)]'}>
++                                {showOnlyAdmin ? "Others' servers" : 'Your servers'}
++                            </span>
++                            <Switch
++                                name={'show_all_servers'}
++                                defaultChecked={showOnlyAdmin}
++                                onChange={() => setShowOnlyAdmin((state) => !state)}
++                            />
++                        </label>
++                    )}
+                 </div>
+-            )}
++            </section>
++
+             {!servers ? (
+-                <Spinner centered size={'large'} />
++                <div className={'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'}>{skeletonCards}</div>
+             ) : (
+                 <Pagination data={servers} onPageSelect={setPage}>
+-                    {({ items }) =>
+-                        items.length > 0 ? (
+-                            items.map((server, index) => (
+-                                <ServerRow key={server.uuid} server={server} css={index > 0 ? tw`mt-2` : undefined} />
+-                            ))
+-                        ) : (
+-                            <p css={tw`text-center text-sm text-neutral-400`}>
+-                                {showOnlyAdmin
+-                                    ? 'There are no other servers to display.'
+-                                    : 'There are no servers associated with your account.'}
+-                            </p>
+-                        )
+-                    }
++                    {({ items }) => {
++                        const filtered = getFiltered(items);
++
++                        if (!filtered.length) {
++                            return (
++                                <div className={'theme-card p-8 text-center'}>
++                                    <h3 className={'text-lg text-[var(--theme-text)]'}>No servers found</h3>
++                                    <p className={'mt-2 text-sm'}>
++                                        {query || statusFilter !== 'all'
++                                            ? 'Try a different search or filter combination.'
++                                            : showOnlyAdmin
++                                            ? 'There are no other servers to display.'
++                                            : 'There are no servers associated with your account.'}
++                                    </p>
++                                </div>
++                            );
++                        }
++
++                        if (layout === 'list') {
++                            return filtered.map((server, index) => (
++                                <ServerRow
++                                    key={server.uuid}
++                                    server={server}
++                                    view={'list'}
++                                    className={index > 0 ? 'mt-3' : ''}
++                                />
++                            ));
++                        }
++
++                        return (
++                            <div className={'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'}>
++                                {filtered.map((server) => (
++                                    <ServerRow key={server.uuid} server={server} view={'grid'} />
++                                ))}
++                            </div>
++                        );
++                    }}
+                 </Pagination>
+             )}
++            {!servers && <Spinner centered />}
+         </PageContentBlock>
+     );
+ };
++
++export default DashboardContainer;
+diff --git a/resources/scripts/components/dashboard/ServerRow.tsx b/resources/scripts/components/dashboard/ServerRow.tsx
+index aa2b5a7..9acd265 100644
+--- a/resources/scripts/components/dashboard/ServerRow.tsx
++++ b/resources/scripts/components/dashboard/ServerRow.tsx
+@@ -1,55 +1,38 @@
+-import React, { memo, useEffect, useRef, useState } from 'react';
++import React, { useEffect, useMemo, useRef, useState } from 'react';
+ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+-import { faEthernet, faHdd, faMemory, faMicrochip, faServer } from '@fortawesome/free-solid-svg-icons';
++import {
++    faCircle,
++    faEthernet,
++    faFileAlt,
++    faHdd,
++    faMemory,
++    faMicrochip,
++    faTerminal,
++} from '@fortawesome/free-solid-svg-icons';
+ import { Link } from 'react-router-dom';
+ import { Server } from '@/api/server/getServer';
+ import getServerResourceUsage, { ServerPowerState, ServerStats } from '@/api/server/getServerResourceUsage';
+ import { bytesToString, ip, mbToBytes } from '@/lib/formatters';
+-import tw from 'twin.macro';
+-import GreyRowBox from '@/components/elements/GreyRowBox';
+ import Spinner from '@/components/elements/Spinner';
+-import styled from 'styled-components/macro';
+-import isEqual from 'react-fast-compare';
+ 
+-// Determines if the current value is in an alarm threshold so we can show it in red rather
+-// than the more faded default style.
+-const isAlarmState = (current: number, limit: number): boolean => limit > 0 && current / (limit * 1024 * 1024) >= 0.9;
++type Timer = ReturnType<typeof setInterval>;
++
++type Props = {
++    server: Server;
++    className?: string;
++    view?: 'grid' | 'list';
++};
+ 
+-const Icon = memo(
+-    styled(FontAwesomeIcon)<{ $alarm: boolean }>`
+-        ${(props) => (props.$alarm ? tw`text-red-400` : tw`text-neutral-500`)};
+-    `,
+-    isEqual
+-);
+-
+-const IconDescription = styled.p<{ $alarm: boolean }>`
+-    ${tw`text-sm ml-2`};
+-    ${(props) => (props.$alarm ? tw`text-white` : tw`text-neutral-400`)};
+-`;
+-
+-const StatusIndicatorBox = styled(GreyRowBox)<{ $status: ServerPowerState | undefined }>`
+-    ${tw`grid grid-cols-12 gap-4 relative`};
+-
+-    & .status-bar {
+-        ${tw`w-2 bg-red-500 absolute right-0 z-20 rounded-full m-1 opacity-50 transition-all duration-150`};
+-        height: calc(100% - 0.5rem);
+-
+-        ${({ $status }) =>
+-            !$status || $status === 'offline'
+-                ? tw`bg-red-500`
+-                : $status === 'running'
+-                ? tw`bg-green-500`
+-                : tw`bg-yellow-500`};
+-    }
+-
+-    &:hover .status-bar {
+-        ${tw`opacity-75`};
+-    }
+-`;
++const statusColor = (status?: ServerPowerState) => {
++    if (status === 'running') return '#22c55e';
++    if (status === 'starting' || status === 'stopping') return '#f59e0b';
+ 
+-type Timer = ReturnType<typeof setInterval>;
++    return '#ef4444';
++};
+ 
+-export default ({ server, className }: { server: Server; className?: string }) => {
++const isAlarmState = (current: number, limit: number): boolean => limit > 0 && current / (limit * 1024 * 1024) >= 0.9;
++
++export default ({ server, className, view = 'list' }: Props) => {
+     const interval = useRef<Timer>(null) as React.MutableRefObject<Timer>;
+     const [isSuspended, setIsSuspended] = useState(server.status === 'suspended');
+     const [stats, setStats] = useState<ServerStats | null>(null);
+@@ -64,8 +47,6 @@ export default ({ server, className }: { server: Server; className?: string }) =
+     }, [stats?.isSuspended, server.status]);
+ 
+     useEffect(() => {
+-        // Don't waste a HTTP request if there is nothing important to show to the user because
+-        // the server is suspended.
+         if (isSuspended || server.isNodeUnderMaintenance) return;
+ 
+         getStats().then(() => {
+@@ -77,106 +58,117 @@ export default ({ server, className }: { server: Server; className?: string }) =
+         };
+     }, [isSuspended, server.isNodeUnderMaintenance]);
+ 
+-    const alarms = { cpu: false, memory: false, disk: false };
+-    if (stats) {
+-        alarms.cpu = server.limits.cpu === 0 ? false : stats.cpuUsagePercent >= server.limits.cpu * 0.9;
+-        alarms.memory = isAlarmState(stats.memoryUsageInBytes, server.limits.memory);
+-        alarms.disk = server.limits.disk === 0 ? false : isAlarmState(stats.diskUsageInBytes, server.limits.disk);
+-    }
+-
+-    const diskLimit = server.limits.disk !== 0 ? bytesToString(mbToBytes(server.limits.disk)) : 'Unlimited';
+-    const memoryLimit = server.limits.memory !== 0 ? bytesToString(mbToBytes(server.limits.memory)) : 'Unlimited';
+-    const cpuLimit = server.limits.cpu !== 0 ? server.limits.cpu + ' %' : 'Unlimited';
++    const usage = useMemo(() => {
++        if (!stats) return null;
++
++        const memoryLimit = server.limits.memory !== 0 ? bytesToString(mbToBytes(server.limits.memory)) : 'Unlimited';
++        const diskLimit = server.limits.disk !== 0 ? bytesToString(mbToBytes(server.limits.disk)) : 'Unlimited';
++        const cpuLimit = server.limits.cpu !== 0 ? `${server.limits.cpu}%` : 'Unlimited';
++
++        return [
++            {
++                key: 'cpu',
++                label: 'CPU',
++                value: `${stats.cpuUsagePercent.toFixed(1)}%`,
++                hint: `of ${cpuLimit}`,
++                icon: faMicrochip,
++                alarm: server.limits.cpu !== 0 && stats.cpuUsagePercent >= server.limits.cpu * 0.9,
++            },
++            {
++                key: 'memory',
++                label: 'RAM',
++                value: bytesToString(stats.memoryUsageInBytes),
++                hint: `of ${memoryLimit}`,
++                icon: faMemory,
++                alarm: isAlarmState(stats.memoryUsageInBytes, server.limits.memory),
++            },
++            {
++                key: 'disk',
++                label: 'Disk',
++                value: bytesToString(stats.diskUsageInBytes),
++                hint: `of ${diskLimit}`,
++                icon: faHdd,
++                alarm: isAlarmState(stats.diskUsageInBytes, server.limits.disk),
++            },
++        ];
++    }, [server.limits.cpu, server.limits.disk, server.limits.memory, stats]);
++
++    const defaultAllocation = server.allocations.find((allocation) => allocation.isDefault);
++    const allocation = defaultAllocation
++        ? `${defaultAllocation.alias || ip(defaultAllocation.ip)}:${defaultAllocation.port}`
++        : 'Allocation unavailable';
+ 
+     return (
+-        <StatusIndicatorBox as={Link} to={`/server/${server.id}`} className={className} $status={stats?.status}>
+-            <div css={tw`flex items-center col-span-12 sm:col-span-5 lg:col-span-6`}>
+-                <div className={'icon mr-4'}>
+-                    <FontAwesomeIcon icon={faServer} />
+-                </div>
+-                <div>
+-                    <p css={tw`text-lg break-words`}>{server.name}</p>
+-                    {!!server.description && (
+-                        <p css={tw`text-sm text-neutral-300 break-words line-clamp-2`}>{server.description}</p>
+-                    )}
+-                </div>
+-            </div>
+-            <div css={tw`flex-1 ml-4 lg:block lg:col-span-2 hidden`}>
+-                <div css={tw`flex justify-center`}>
+-                    <FontAwesomeIcon icon={faEthernet} css={tw`text-neutral-500`} />
+-                    <p css={tw`text-sm text-neutral-400 ml-2`}>
+-                        {server.allocations
+-                            .filter((alloc) => alloc.isDefault)
+-                            .map((allocation) => (
+-                                <React.Fragment key={allocation.ip + allocation.port.toString()}>
+-                                    {allocation.alias || ip(allocation.ip)}:{allocation.port}
+-                                </React.Fragment>
+-                            ))}
+-                    </p>
+-                </div>
+-            </div>
+-            <div css={tw`hidden col-span-7 lg:col-span-4 sm:flex items-baseline justify-center`}>
+-                {!stats || isSuspended || server.isNodeUnderMaintenance ? (
+-                    isSuspended ? (
+-                        <div css={tw`flex-1 text-center`}>
+-                            <span css={tw`bg-red-500 rounded px-2 py-1 text-red-100 text-xs`}>
+-                                {server.status === 'suspended' ? 'Suspended' : 'Connection Error'}
+-                            </span>
+-                        </div>
+-                    ) : server.isNodeUnderMaintenance ? (
+-                        <div css={tw`flex-1 text-center`}>
+-                            <span css={tw`bg-yellow-500 rounded px-2 py-1 text-yellow-100 text-xs`}>
+-                                Under Maintenance
+-                            </span>
++        <article className={`theme-card p-4 ${className || ''}`}>
++            <div className={'flex items-start justify-between gap-3'}>
++                <Link to={`/server/${server.id}`} className={'no-underline'}>
++                    <div className={'flex items-center gap-3'}>
++                        <div className={'icon'}>
++                            <FontAwesomeIcon icon={faTerminal} />
+                         </div>
+-                    ) : server.isTransferring || server.status ? (
+-                        <div css={tw`flex-1 text-center`}>
+-                            <span css={tw`bg-neutral-500 rounded px-2 py-1 text-neutral-100 text-xs`}>
+-                                {server.isTransferring
+-                                    ? 'Transferring'
+-                                    : server.status === 'installing'
+-                                    ? 'Installing'
+-                                    : server.status === 'restoring_backup'
+-                                    ? 'Restoring Backup'
+-                                    : 'Unavailable'}
+-                            </span>
++                        <div>
++                            <h3 className={'text-lg leading-tight'}>{server.name}</h3>
++                            <p className={'text-xs uppercase tracking-[0.08em] mt-1'}>{server.identifier}</p>
+                         </div>
+-                    ) : (
++                    </div>
++                </Link>
++                <span className={'theme-badge inline-flex items-center px-3 py-1 text-[11px] gap-2'}>
++                    <FontAwesomeIcon icon={faCircle} style={{ color: statusColor(stats?.status) }} />
++                    {isSuspended ? 'Suspended' : stats?.status || server.status || 'offline'}
++                </span>
++            </div>
++
++            {server.description && <p className={'mt-3 text-sm line-clamp-2'}>{server.description}</p>}
++
++            <div
++                className={`mt-4 ${
++                    view === 'grid' ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-1 sm:grid-cols-3 gap-2'
++                }`}
++            >
++                <div
++                    className={
++                        'rounded-md border border-[var(--theme-border)] px-3 py-2 text-xs flex items-center gap-2'
++                    }
++                >
++                    <FontAwesomeIcon icon={faEthernet} />
++                    <span className={'truncate'}>{allocation}</span>
++                </div>
++                {!usage ? (
++                    <div
++                        className={
++                            'sm:col-span-2 flex items-center justify-center rounded-md border border-[var(--theme-border)] p-3'
++                        }
++                    >
+                         <Spinner size={'small'} />
+-                    )
++                    </div>
+                 ) : (
+-                    <React.Fragment>
+-                        <div css={tw`flex-1 ml-4 sm:block hidden`}>
+-                            <div css={tw`flex justify-center`}>
+-                                <Icon icon={faMicrochip} $alarm={alarms.cpu} />
+-                                <IconDescription $alarm={alarms.cpu}>
+-                                    {stats.cpuUsagePercent.toFixed(2)} %
+-                                </IconDescription>
++                    usage.map((item) => (
++                        <div key={item.key} className={'rounded-md border border-[var(--theme-border)] px-3 py-2'}>
++                            <div className={'text-xs flex items-center gap-2'}>
++                                <FontAwesomeIcon
++                                    icon={item.icon}
++                                    style={{ color: item.alarm ? '#f87171' : 'var(--theme-muted)' }}
++                                />
++                                <span>{item.label}</span>
+                             </div>
+-                            <p css={tw`text-xs text-neutral-600 text-center mt-1`}>of {cpuLimit}</p>
++                            <div className={'text-sm text-[var(--theme-text)] mt-1'}>{item.value}</div>
++                            <div className={'text-[11px] text-[var(--theme-muted)]'}>{item.hint}</div>
+                         </div>
+-                        <div css={tw`flex-1 ml-4 sm:block hidden`}>
+-                            <div css={tw`flex justify-center`}>
+-                                <Icon icon={faMemory} $alarm={alarms.memory} />
+-                                <IconDescription $alarm={alarms.memory}>
+-                                    {bytesToString(stats.memoryUsageInBytes)}
+-                                </IconDescription>
+-                            </div>
+-                            <p css={tw`text-xs text-neutral-600 text-center mt-1`}>of {memoryLimit}</p>
+-                        </div>
+-                        <div css={tw`flex-1 ml-4 sm:block hidden`}>
+-                            <div css={tw`flex justify-center`}>
+-                                <Icon icon={faHdd} $alarm={alarms.disk} />
+-                                <IconDescription $alarm={alarms.disk}>
+-                                    {bytesToString(stats.diskUsageInBytes)}
+-                                </IconDescription>
+-                            </div>
+-                            <p css={tw`text-xs text-neutral-600 text-center mt-1`}>of {diskLimit}</p>
+-                        </div>
+-                    </React.Fragment>
++                    ))
+                 )}
+             </div>
+-            <div className={'status-bar'} />
+-        </StatusIndicatorBox>
++
++            <div className={'mt-4 flex flex-wrap gap-2 text-xs'}>
++                <Link to={`/server/${server.id}`} className={'theme-nav-link px-3 py-2 no-underline'}>
++                    <FontAwesomeIcon icon={faTerminal} className={'mr-1'} /> Console
++                </Link>
++                <Link to={`/server/${server.id}/files`} className={'theme-nav-link px-3 py-2 no-underline'}>
++                    <FontAwesomeIcon icon={faFileAlt} className={'mr-1'} /> Files
++                </Link>
++                <Link to={`/server/${server.id}/settings`} className={'theme-nav-link px-3 py-2 no-underline'}>
++                    Settings
++                </Link>
++            </div>
++        </article>
+     );
+ };
+diff --git a/resources/scripts/components/elements/Button.tsx b/resources/scripts/components/elements/Button.tsx
+index e02f00f..7ab68ec 100644
+--- a/resources/scripts/components/elements/Button.tsx
++++ b/resources/scripts/components/elements/Button.tsx
+@@ -10,86 +10,57 @@ interface Props {
+     isSecondary?: boolean;
+ }
+ 
+-const ButtonStyle = styled.button<Omit<Props, 'isLoading'>>`
+-    ${tw`relative inline-block rounded p-2 uppercase tracking-wide text-sm transition-all duration-150 border`};
+-
+-    ${(props) =>
+-        ((!props.isSecondary && !props.color) || props.color === 'primary') &&
+-        css<Props>`
+-            ${(props) => !props.isSecondary && tw`bg-primary-500 border-primary-600 border text-primary-50`};
+-
+-            &:hover:not(:disabled) {
+-                ${tw`bg-primary-600 border-primary-700`};
+-            }
+-        `};
+-
+-    ${(props) =>
+-        props.color === 'grey' &&
+-        css`
+-            ${tw`border-neutral-600 bg-neutral-500 text-neutral-50`};
+-
+-            &:hover:not(:disabled) {
+-                ${tw`bg-neutral-600 border-neutral-700`};
+-            }
+-        `};
+-
+-    ${(props) =>
+-        props.color === 'green' &&
+-        css<Props>`
+-            ${tw`border-green-600 bg-green-500 text-green-50`};
++const palette = {
++    primary: 'var(--theme-primary)',
++    green: 'var(--theme-accent)',
++    red: '#ef4444',
++    grey: 'var(--theme-border)',
++};
+ 
+-            &:hover:not(:disabled) {
+-                ${tw`bg-green-600 border-green-700`};
+-            }
+-
+-            ${(props) =>
+-                props.isSecondary &&
+-                css`
+-                    &:active:not(:disabled) {
+-                        ${tw`bg-green-600 border-green-700`};
+-                    }
+-                `};
+-        `};
+-
+-    ${(props) =>
+-        props.color === 'red' &&
+-        css<Props>`
+-            ${tw`border-red-600 bg-red-500 text-red-50`};
++const ButtonStyle = styled.button<Omit<Props, 'isLoading'>>`
++    ${tw`relative inline-flex items-center justify-center rounded p-2 uppercase tracking-wide text-sm border theme-transition`};
++    border-radius: var(--theme-radius);
++    font-weight: 600;
++    color: var(--theme-text);
++    border-color: color-mix(in srgb, var(--theme-border) 92%, transparent);
++    background: color-mix(in srgb, var(--theme-surface) 94%, transparent);
++
++    ${(props) => {
++        const color = palette[props.color || 'primary'];
++
++        if (props.isSecondary) {
++            return css`
++                background: transparent;
++                color: var(--theme-text);
++
++                &:hover:not(:disabled) {
++                    background: color-mix(in srgb, ${color} 18%, transparent);
++                    border-color: ${color};
++                }
++            `;
++        }
++
++        return css`
++            background: ${color};
++            color: #fff;
++            border-color: color-mix(in srgb, ${color} 76%, #000 24%);
+ 
+             &:hover:not(:disabled) {
+-                ${tw`bg-red-600 border-red-700`};
++                filter: brightness(1.06);
++                transform: translateY(-1px);
+             }
+-
+-            ${(props) =>
+-                props.isSecondary &&
+-                css`
+-                    &:active:not(:disabled) {
+-                        ${tw`bg-red-600 border-red-700`};
+-                    }
+-                `};
+-        `};
++        `;
++    }};
+ 
+     ${(props) => props.size === 'xsmall' && tw`px-2 py-1 text-xs`};
+     ${(props) => (!props.size || props.size === 'small') && tw`px-4 py-2`};
+     ${(props) => props.size === 'large' && tw`p-4 text-sm`};
+     ${(props) => props.size === 'xlarge' && tw`p-4 w-full`};
+ 
+-    ${(props) =>
+-        props.isSecondary &&
+-        css<Props>`
+-            ${tw`border-neutral-600 bg-transparent text-neutral-200`};
+-
+-            &:hover:not(:disabled) {
+-                ${tw`border-neutral-500 text-neutral-100`};
+-                ${(props) => props.color === 'red' && tw`bg-red-500 border-red-600 text-red-50`};
+-                ${(props) => props.color === 'primary' && tw`bg-primary-500 border-primary-600 text-primary-50`};
+-                ${(props) => props.color === 'green' && tw`bg-green-500 border-green-600 text-green-50`};
+-            }
+-        `};
+-
+     &:disabled {
+         opacity: 0.55;
+         cursor: default;
++        transform: none !important;
+     }
+ `;
+ 
+diff --git a/resources/scripts/components/elements/ContentBox.tsx b/resources/scripts/components/elements/ContentBox.tsx
+index b829088..eaf839c 100644
+--- a/resources/scripts/components/elements/ContentBox.tsx
++++ b/resources/scripts/components/elements/ContentBox.tsx
+@@ -14,11 +14,23 @@ type Props = Readonly<
+ 
+ const ContentBox = ({ title, borderColor, showFlashes, showLoadingOverlay, children, ...props }: Props) => (
+     <div {...props}>
+-        {title && <h2 css={tw`text-neutral-300 mb-4 px-4 text-2xl`}>{title}</h2>}
++        {title && (
++            <h2 css={tw`mb-4 text-2xl`} style={{ color: 'var(--theme-text)' }}>
++                {title}
++            </h2>
++        )}
+         {showFlashes && (
+             <FlashMessageRender byKey={typeof showFlashes === 'string' ? showFlashes : undefined} css={tw`mb-4`} />
+         )}
+-        <div css={[tw`bg-neutral-700 p-4 rounded shadow-lg relative`, !!borderColor && tw`border-t-4`]}>
++        <div
++            css={tw`p-4 relative`}
++            style={{
++                background: 'var(--theme-card)',
++                borderRadius: 'var(--theme-radius)',
++                border: `1px solid ${borderColor || 'var(--theme-border)'}`,
++                boxShadow: '0 16px 28px rgba(0, 0, 0, 0.22)',
++            }}
++        >
+             <SpinnerOverlay visible={showLoadingOverlay || false} />
+             {children}
+         </div>
+diff --git a/resources/scripts/components/elements/GreyRowBox.tsx b/resources/scripts/components/elements/GreyRowBox.tsx
+index e5a7f96..a9e4273 100644
+--- a/resources/scripts/components/elements/GreyRowBox.tsx
++++ b/resources/scripts/components/elements/GreyRowBox.tsx
+@@ -2,11 +2,27 @@ import styled from 'styled-components/macro';
+ import tw from 'twin.macro';
+ 
+ export default styled.div<{ $hoverable?: boolean }>`
+-    ${tw`flex rounded no-underline text-neutral-200 items-center bg-neutral-700 p-4 border border-transparent transition-colors duration-150 overflow-hidden`};
++    ${tw`flex no-underline items-center p-4 overflow-hidden theme-transition`};
++    border-radius: calc(var(--theme-radius) + 2px);
++    color: var(--theme-text);
++    border: 1px solid color-mix(in srgb, var(--theme-border) 88%, transparent);
++    background: color-mix(in srgb, var(--theme-card) 92%, transparent);
++    box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22);
+ 
+-    ${(props) => props.$hoverable !== false && tw`hover:border-neutral-500`};
++    ${(props) => props.$hoverable !== false && 'cursor: pointer;'}
++
++    ${(props) =>
++        props.$hoverable !== false &&
++        `
++        &:hover {
++            border-color: color-mix(in srgb, var(--theme-primary) 45%, var(--theme-border));
++            transform: translateY(-1px);
++        }
++    `};
+ 
+     & .icon {
+-        ${tw`rounded-full w-16 flex items-center justify-center bg-neutral-500 p-3`};
++        ${tw`rounded-full w-14 h-14 flex items-center justify-center p-3`};
++        background: color-mix(in srgb, var(--theme-primary) 18%, transparent);
++        color: var(--theme-text);
+     }
+ `;
+diff --git a/resources/scripts/components/elements/Input.tsx b/resources/scripts/components/elements/Input.tsx
+index 677a501..441e821 100644
+--- a/resources/scripts/components/elements/Input.tsx
++++ b/resources/scripts/components/elements/Input.tsx
+@@ -7,45 +7,53 @@ export interface Props {
+ }
+ 
+ const light = css<Props>`
+-    ${tw`bg-white border-neutral-200 text-neutral-800`};
++    background: #fff;
++    border-color: #dbe2ef;
++    color: #0f172a;
++
+     &:focus {
+-        ${tw`border-primary-400`}
++        border-color: var(--theme-primary);
+     }
+ 
+     &:disabled {
+-        ${tw`bg-neutral-100 border-neutral-200`};
++        background: #f1f5f9;
++        border-color: #dbe2ef;
+     }
+ `;
+ 
+ const checkboxStyle = css<Props>`
+-    ${tw`bg-neutral-500 cursor-pointer appearance-none inline-block align-middle select-none flex-shrink-0 w-4 h-4 text-primary-400 border border-neutral-300 rounded-sm`};
++    ${tw`cursor-pointer appearance-none inline-block align-middle select-none flex-shrink-0 w-4 h-4 rounded-sm`};
+     color-adjust: exact;
+     background-origin: border-box;
+-    transition: all 75ms linear, box-shadow 25ms linear;
++    transition: all 100ms linear;
++    border: 1px solid var(--theme-border);
++    background: color-mix(in srgb, var(--theme-surface) 86%, transparent);
+ 
+     &:checked {
+-        ${tw`border-transparent bg-no-repeat bg-center`};
++        border-color: transparent;
+         background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M5.707 7.293a1 1 0 0 0-1.414 1.414l2 2a1 1 0 0 0 1.414 0l4-4a1 1 0 0 0-1.414-1.414L7 8.586 5.707 7.293z'/%3e%3c/svg%3e");
+-        background-color: currentColor;
++        background-color: var(--theme-primary);
+         background-size: 100% 100%;
+     }
+ 
+     &:focus {
+-        ${tw`outline-none border-primary-300`};
+-        box-shadow: 0 0 0 1px rgba(9, 103, 210, 0.25);
++        ${tw`outline-none`};
++        box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-primary) 30%, transparent);
+     }
+ `;
+ 
+ const inputStyle = css<Props>`
+-    // Reset to normal styling.
+     resize: none;
+     ${tw`appearance-none outline-none w-full min-w-0`};
+     ${tw`p-3 border-2 rounded text-sm transition-all duration-150`};
+-    ${tw`bg-neutral-600 border-neutral-500 hover:border-neutral-400 text-neutral-200 shadow-none focus:ring-0`};
++    background: color-mix(in srgb, var(--theme-surface) 92%, transparent);
++    border-color: color-mix(in srgb, var(--theme-border) 94%, transparent);
++    color: var(--theme-text);
++    box-shadow: none;
+ 
+     & + .input-help {
+         ${tw`mt-1 text-xs`};
+-        ${(props) => (props.hasError ? tw`text-red-200` : tw`text-neutral-200`)};
++        color: ${(props) => (props.hasError ? '#fecaca' : 'var(--theme-muted)')};
+     }
+ 
+     &:required,
+@@ -54,16 +62,18 @@ const inputStyle = css<Props>`
+     }
+ 
+     &:not(:disabled):not(:read-only):focus {
+-        ${tw`shadow-md border-primary-300 ring-2 ring-primary-400 ring-opacity-50`};
+-        ${(props) => props.hasError && tw`border-red-300 ring-red-200`};
++        border-color: var(--theme-primary);
++        box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-primary) 30%, transparent);
++
++        ${(props) => props.hasError && 'border-color: #f87171; box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.35);'};
+     }
+ 
+     &:disabled {
+-        ${tw`opacity-75`};
++        opacity: 0.75;
+     }
+ 
+     ${(props) => props.isLight && light};
+-    ${(props) => props.hasError && tw`text-red-100 border-red-400 hover:border-red-300`};
++    ${(props) => props.hasError && 'color: #fecaca; border-color: #f87171;'};
+ `;
+ 
+ const Input = styled.input<Props>`
+@@ -80,6 +90,7 @@ const Input = styled.input<Props>`
+         }
+     }
+ `;
++
+ const Textarea = styled.textarea<Props>`
+     ${inputStyle}
+ `;
+diff --git a/resources/scripts/components/elements/Modal.tsx b/resources/scripts/components/elements/Modal.tsx
+index d4f6dfe..08d5e02 100644
+--- a/resources/scripts/components/elements/Modal.tsx
++++ b/resources/scripts/components/elements/Modal.tsx
+@@ -22,7 +22,7 @@ export interface ModalProps extends RequiredModalProps {
+ 
+ export const ModalMask = styled.div`
+     ${tw`fixed z-50 overflow-auto flex w-full inset-0`};
+-    background: rgba(0, 0, 0, 0.7);
++    background: color-mix(in srgb, var(--theme-bg) 80%, rgba(0, 0, 0, 0.75));
+ `;
+ 
+ const ModalContainer = styled.div<{ alignTop?: boolean }>`
+@@ -42,7 +42,8 @@ const ModalContainer = styled.div<{ alignTop?: boolean }>`
+     margin-bottom: auto;
+ 
+     & > .close-icon {
+-        ${tw`absolute right-0 p-2 text-white cursor-pointer opacity-50 transition-all duration-150 ease-linear hover:opacity-100`};
++        ${tw`absolute right-0 p-2 cursor-pointer opacity-60 transition-all duration-150 ease-linear hover:opacity-100`};
++        color: var(--theme-text);
+         top: -2.5rem;
+ 
+         &:hover {
+@@ -69,7 +70,7 @@ const Modal: React.FC<ModalProps> = ({
+     const [render, setRender] = useState(visible);
+ 
+     const isDismissable = useMemo(() => {
+-        return (dismissable || true) && !(showSpinnerOverlay || false);
++        return (dismissable ?? true) && !(showSpinnerOverlay || false);
+     }, [dismissable, showSpinnerOverlay]);
+ 
+     useEffect(() => {
+@@ -123,14 +124,23 @@ const Modal: React.FC<ModalProps> = ({
+                         <Fade timeout={150} appear in>
+                             <div
+                                 css={tw`absolute w-full h-full rounded flex items-center justify-center`}
+-                                style={{ background: 'hsla(211, 10%, 53%, 0.35)', zIndex: 9999 }}
++                                style={{
++                                    background: 'color-mix(in srgb, var(--theme-bg) 45%, transparent)',
++                                    zIndex: 9999,
++                                    borderRadius: 'var(--theme-radius)',
++                                }}
+                             >
+                                 <Spinner />
+                             </div>
+                         </Fade>
+                     )}
+                     <div
+-                        css={tw`bg-neutral-800 p-3 sm:p-4 md:p-6 rounded shadow-md overflow-y-scroll transition-all duration-150`}
++                        css={tw`p-3 sm:p-4 md:p-6 shadow-md overflow-y-scroll transition-all duration-150`}
++                        style={{
++                            background: 'var(--theme-card)',
++                            borderRadius: 'var(--theme-radius)',
++                            border: '1px solid var(--theme-border)',
++                        }}
+                     >
+                         {children}
+                     </div>
+diff --git a/resources/scripts/components/elements/PageContentBlock.tsx b/resources/scripts/components/elements/PageContentBlock.tsx
+index a4df195..0493500 100644
+--- a/resources/scripts/components/elements/PageContentBlock.tsx
++++ b/resources/scripts/components/elements/PageContentBlock.tsx
+@@ -3,6 +3,7 @@ import ContentContainer from '@/components/elements/ContentContainer';
+ import { CSSTransition } from 'react-transition-group';
+ import tw from 'twin.macro';
+ import FlashMessageRender from '@/components/FlashMessageRender';
++import { useTheme } from '@/context/ThemeContext';
+ 
+ export interface PageContentBlockProps {
+     title?: string;
+@@ -11,30 +12,28 @@ export interface PageContentBlockProps {
+ }
+ 
+ const PageContentBlock: React.FC<PageContentBlockProps> = ({ title, showFlashKey, className, children }) => {
++    const { theme } = useTheme();
++
+     useEffect(() => {
+         if (title) {
+-            document.title = title;
++            document.title = `${theme.brandName} · ${title}`;
+         }
+-    }, [title]);
++    }, [title, theme.brandName]);
+ 
+     return (
+         <CSSTransition timeout={150} classNames={'fade'} appear in>
+             <>
+-                <ContentContainer css={tw`my-4 sm:my-10`} className={className}>
++                <ContentContainer css={tw`my-4 sm:my-8`} className={className}>
+                     {showFlashKey && <FlashMessageRender byKey={showFlashKey} css={tw`mb-4`} />}
+                     {children}
+                 </ContentContainer>
+-                <ContentContainer css={tw`mb-4`}>
+-                    <p css={tw`text-center text-neutral-500 text-xs`}>
+-                        <a
+-                            rel={'noopener nofollow noreferrer'}
+-                            href={'https://pterodactyl.io'}
+-                            target={'_blank'}
+-                            css={tw`no-underline text-neutral-500 hover:text-neutral-300`}
+-                        >
++                <ContentContainer css={tw`mb-6`}>
++                    <p css={tw`text-center text-xs theme-page-footer`}>
++                        {theme.themeName} v{theme.version} ·{' '}
++                        <a rel={'noopener nofollow noreferrer'} href={'https://pterodactyl.io'} target={'_blank'}>
+                             Pterodactyl&reg;
+-                        </a>
+-                        &nbsp;&copy; 2015 - {new Date().getFullYear()}
++                        </a>{' '}
++                        &copy; 2015 - {new Date().getFullYear()}
+                     </p>
+                 </ContentContainer>
+             </>
+diff --git a/resources/scripts/components/elements/Select.tsx b/resources/scripts/components/elements/Select.tsx
+index fc50f25..8f805ef 100644
+--- a/resources/scripts/components/elements/Select.tsx
++++ b/resources/scripts/components/elements/Select.tsx
+@@ -6,7 +6,8 @@ interface Props {
+ }
+ 
+ const Select = styled.select<Props>`
+-    ${tw`shadow-none block p-3 pr-8 rounded border w-full text-sm transition-colors duration-150 ease-linear`};
++    ${tw`shadow-none block p-3 pr-8 rounded border-2 w-full text-sm transition-colors duration-150 ease-linear`};
++    border-radius: var(--theme-radius);
+ 
+     &,
+     &:hover:not(:disabled),
+@@ -28,12 +29,14 @@ const Select = styled.select<Props>`
+     ${(props) =>
+         !props.hideDropdownArrow &&
+         css`
+-            ${tw`bg-neutral-600 border-neutral-500 text-neutral-200`};
+-            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='%23C3D1DF' d='M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z'/%3e%3c/svg%3e ");
++            background-color: color-mix(in srgb, var(--theme-surface) 92%, transparent);
++            border-color: color-mix(in srgb, var(--theme-border) 94%, transparent);
++            color: var(--theme-text);
++            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='%23cbd5e1' d='M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z'/%3e%3c/svg%3e ");
+ 
+             &:hover:not(:disabled),
+             &:focus {
+-                ${tw`border-neutral-400`};
++                border-color: var(--theme-primary);
+             }
+         `};
+ `;
+diff --git a/resources/scripts/components/elements/SubNavigation.tsx b/resources/scripts/components/elements/SubNavigation.tsx
+index 9a25b80..4f281a3 100644
+--- a/resources/scripts/components/elements/SubNavigation.tsx
++++ b/resources/scripts/components/elements/SubNavigation.tsx
+@@ -1,29 +1,32 @@
+ import styled from 'styled-components/macro';
+-import tw, { theme } from 'twin.macro';
++import tw from 'twin.macro';
+ 
+ const SubNavigation = styled.div`
+-    ${tw`w-full bg-neutral-700 shadow overflow-x-auto`};
++    ${tw`w-full overflow-x-auto theme-subnav`};
+ 
+     & > div {
+-        ${tw`flex items-center text-sm mx-auto px-2`};
++        ${tw`flex items-center text-sm mx-auto px-2 py-1`};
+         max-width: 1200px;
+ 
+         & > a,
+         & > div {
+-            ${tw`inline-block py-3 px-4 text-neutral-300 no-underline whitespace-nowrap transition-all duration-150`};
++            ${tw`inline-flex items-center py-2 px-4 whitespace-nowrap no-underline theme-transition`};
++            color: var(--theme-muted);
++            border-radius: 999px;
+ 
+             &:not(:first-of-type) {
+                 ${tw`ml-2`};
+             }
+ 
+             &:hover {
+-                ${tw`text-neutral-100`};
++                color: var(--theme-text);
++                background: color-mix(in srgb, var(--theme-primary) 18%, transparent);
+             }
+ 
+             &:active,
+             &.active {
+-                ${tw`text-neutral-100`};
+-                box-shadow: inset 0 -2px ${theme`colors.cyan.600`.toString()};
++                color: #fff;
++                background: color-mix(in srgb, var(--theme-primary) 90%, transparent);
+             }
+         }
+     }
+diff --git a/resources/scripts/components/elements/alert/Alert.tsx b/resources/scripts/components/elements/alert/Alert.tsx
+index e99d6d5..21d148f 100644
+--- a/resources/scripts/components/elements/alert/Alert.tsx
++++ b/resources/scripts/components/elements/alert/Alert.tsx
+@@ -12,18 +12,19 @@ export default ({ type, className, children }: AlertProps) => {
+     return (
+         <div
+             className={classNames(
+-                'flex items-center border-l-8 text-gray-50 rounded-md shadow px-4 py-3',
++                'flex items-center border text-sm rounded-md px-4 py-3',
+                 {
+-                    ['border-red-500 bg-red-500/25']: type === 'danger',
+-                    ['border-yellow-500 bg-yellow-500/25']: type === 'warning',
++                    ['border-red-500 bg-red-500/15 text-red-100']: type === 'danger',
++                    ['border-yellow-500 bg-yellow-500/15 text-yellow-100']: type === 'warning',
+                 },
+                 className
+             )}
++            style={{ borderRadius: 'var(--theme-radius)' }}
+         >
+             {type === 'danger' ? (
+-                <ShieldExclamationIcon className={'w-6 h-6 text-red-400 mr-2'} />
++                <ShieldExclamationIcon className={'w-5 h-5 text-red-400 mr-2'} />
+             ) : (
+-                <ExclamationIcon className={'w-6 h-6 text-yellow-500 mr-2'} />
++                <ExclamationIcon className={'w-5 h-5 text-yellow-400 mr-2'} />
+             )}
+             {children}
+         </div>
+diff --git a/resources/scripts/components/server/console/Console.tsx b/resources/scripts/components/server/console/Console.tsx
+index 0879d20..f150b91 100644
+--- a/resources/scripts/components/server/console/Console.tsx
++++ b/resources/scripts/components/server/console/Console.tsx
+@@ -201,6 +201,36 @@ export default () => {
+     return (
+         <div className={classNames(styles.terminal, 'relative')}>
+             <SpinnerOverlay visible={!connected} size={'large'} />
++            <div
++                className={
++                    'mb-2 flex items-center justify-between rounded-md border border-[var(--theme-border)] bg-[var(--theme-surface)] px-3 py-2 text-xs'
++                }
++            >
++                <span className={'inline-flex items-center gap-2 text-[var(--theme-muted)]'}>
++                    <span
++                        className={'h-2 w-2 rounded-full'}
++                        style={{ background: connected ? '#22c55e' : '#ef4444' }}
++                        aria-hidden
++                    />
++                    {connected ? 'Connected' : 'Disconnected'}
++                </span>
++                <div className={'flex items-center gap-2'}>
++                    <button
++                        type={'button'}
++                        className={'theme-nav-link px-2 py-1 text-[11px]'}
++                        onClick={() => searchBar.show()}
++                    >
++                        Search
++                    </button>
++                    <button
++                        type={'button'}
++                        className={'theme-nav-link px-2 py-1 text-[11px]'}
++                        onClick={() => terminal.clear()}
++                    >
++                        Clear
++                    </button>
++                </div>
++            </div>
+             <div
+                 className={classNames(styles.container, styles.overflows_container, { 'rounded-b': !canSendCommands })}
+             >
+diff --git a/resources/scripts/components/server/console/ServerConsoleContainer.tsx b/resources/scripts/components/server/console/ServerConsoleContainer.tsx
+index de7ba3b..f0f0bd4 100644
+--- a/resources/scripts/components/server/console/ServerConsoleContainer.tsx
++++ b/resources/scripts/components/server/console/ServerConsoleContainer.tsx
+@@ -22,29 +22,30 @@ const ServerConsoleContainer = () => {
+     const isNodeUnderMaintenance = ServerContext.useStoreState((state) => state.server.data!.isNodeUnderMaintenance);
+ 
+     return (
+-        <ServerContentBlock title={'Console'}>
++        <ServerContentBlock title={'Overview'}>
+             {(isNodeUnderMaintenance || isInstalling || isTransferring) && (
+                 <Alert type={'warning'} className={'mb-4'}>
+                     {isNodeUnderMaintenance
+-                        ? 'The node of this server is currently under maintenance and all actions are unavailable.'
++                        ? 'The node for this server is under maintenance. Actions are temporarily disabled.'
+                         : isInstalling
+-                        ? 'This server is currently running its installation process and most actions are unavailable.'
+-                        : 'This server is currently being transferred to another node and all actions are unavailable.'}
++                        ? 'This server is still installing. Some actions are unavailable until completion.'
++                        : 'This server is currently being transferred. Actions are temporarily disabled.'}
+                 </Alert>
+             )}
+-            <div className={'grid grid-cols-4 gap-4 mb-4'}>
+-                <div className={'hidden sm:block sm:col-span-2 lg:col-span-3 pr-4'}>
+-                    <h1 className={'font-header font-medium text-2xl text-gray-50 leading-relaxed line-clamp-1'}>
+-                        {name}
+-                    </h1>
+-                    <p className={'text-sm line-clamp-2'}>{description}</p>
++            <section className={'theme-card p-4 sm:p-5 mb-4'}>
++                <div className={'grid grid-cols-1 lg:grid-cols-4 gap-4'}>
++                    <div className={'lg:col-span-3'}>
++                        <h1 className={'font-semibold text-2xl leading-relaxed line-clamp-1'}>{name}</h1>
++                        <p className={'text-sm line-clamp-2 mt-1'}>{description || 'No description configured.'}</p>
++                    </div>
++                    <div className={'lg:col-span-1 flex items-start lg:justify-end'}>
++                        <Can action={['control.start', 'control.stop', 'control.restart']} matchAny>
++                            <PowerButtons className={'flex flex-wrap lg:justify-end gap-2'} />
++                        </Can>
++                    </div>
+                 </div>
+-                <div className={'col-span-4 sm:col-span-2 lg:col-span-1 self-end'}>
+-                    <Can action={['control.start', 'control.stop', 'control.restart']} matchAny>
+-                        <PowerButtons className={'flex sm:justify-end space-x-2'} />
+-                    </Can>
+-                </div>
+-            </div>
++            </section>
++
+             <div className={'grid grid-cols-4 gap-2 sm:gap-4 mb-4'}>
+                 <div className={'flex col-span-4 lg:col-span-3'}>
+                     <Spinner.Suspense>
+diff --git a/resources/scripts/components/server/console/style.module.css b/resources/scripts/components/server/console/style.module.css
+index 8088fcb..a8396e5 100644
+--- a/resources/scripts/components/server/console/style.module.css
++++ b/resources/scripts/components/server/console/style.module.css
+@@ -1,16 +1,19 @@
+ .stat_block {
+-    @apply flex items-center rounded shadow-lg relative;
++    @apply flex items-center rounded relative;
+     @apply col-span-3 md:col-span-2 lg:col-span-6;
+     @apply px-3 py-2 md:p-3 lg:p-4;
++    border: 1px solid var(--theme-border);
++    background: var(--theme-card);
++    border-radius: var(--theme-radius);
+ 
+     & > .status_bar {
+         @apply w-1 h-full absolute left-0 top-0 rounded-l sm:hidden;
+     }
+ 
+     & > .icon {
+-        @apply hidden flex-shrink-0 items-center justify-center rounded-lg shadow-md w-12 h-12;
+-        @apply transition-colors duration-500;
++        @apply hidden flex-shrink-0 items-center justify-center rounded-lg w-12 h-12;
+         @apply sm:flex sm:mr-4;
++        background: color-mix(in srgb, var(--theme-primary) 18%, transparent);
+ 
+         & > svg {
+             @apply w-6 h-6 m-auto;
+@@ -31,7 +34,9 @@
+     }
+ 
+     & > .container {
+-        @apply rounded-t p-1 sm:p-2 bg-black min-h-[16rem] flex-1 font-mono text-sm;
++        @apply rounded-t p-1 sm:p-2 min-h-[16rem] flex-1 font-mono text-sm;
++        background: #030712;
++        border: 1px solid var(--theme-border);
+ 
+         & #terminal {
+             @apply h-full;
+@@ -41,7 +46,7 @@
+             }
+ 
+             &::-webkit-scrollbar-thumb {
+-                @apply bg-gray-900;
++                background: color-mix(in srgb, var(--theme-border) 78%, black);
+             }
+         }
+     }
+@@ -51,13 +56,24 @@
+     }
+ 
+     & .command_input {
+-        @apply relative bg-gray-900 px-2 text-gray-100 pl-10 pr-4 py-2 w-full font-mono text-sm sm:rounded-b;
++        @apply relative px-2 pl-10 pr-4 py-2 w-full font-mono text-sm sm:rounded-b;
+         @apply focus:ring-0 outline-none focus-visible:outline-none;
+-        @apply border-0 border-b-2 border-transparent transition-colors duration-100;
+-        @apply active:border-cyan-500 focus:border-cyan-500;
++        @apply border border-t-0 transition-colors duration-100;
++        background: color-mix(in srgb, var(--theme-surface) 95%, #000);
++        color: var(--theme-text);
++        border-color: var(--theme-border);
++
++        &:focus,
++        &:active {
++            border-color: var(--theme-primary);
++        }
+     }
+ }
+ 
+ .chart_container {
+-    @apply bg-gray-600 rounded shadow-lg pt-2 border-b-4 border-gray-700 relative;
++    @apply rounded pt-2 relative;
++    background: var(--theme-card);
++    border: 1px solid var(--theme-border);
++    border-bottom-width: 2px;
++    border-radius: var(--theme-radius);
+ }
+diff --git a/resources/scripts/routers/AuthenticationRouter.tsx b/resources/scripts/routers/AuthenticationRouter.tsx
+index 27d13f1..81bb1f0 100644
+--- a/resources/scripts/routers/AuthenticationRouter.tsx
++++ b/resources/scripts/routers/AuthenticationRouter.tsx
+@@ -13,7 +13,7 @@ export default () => {
+     const { path } = useRouteMatch();
+ 
+     return (
+-        <div className={'pt-8 xl:pt-32'}>
++        <div className={'theme-auth-shell'}>
+             <Switch location={location}>
+                 <Route path={`${path}/login`} component={LoginContainer} exact />
+                 <Route path={`${path}/login/checkpoint`} component={LoginCheckpointContainer} />
+diff --git a/resources/scripts/routers/routes.ts b/resources/scripts/routers/routes.ts
+index 8fba642..d18f1de 100644
+--- a/resources/scripts/routers/routes.ts
++++ b/resources/scripts/routers/routes.ts
+@@ -70,6 +70,13 @@ export default {
+         {
+             path: '/',
+             permission: null,
++            name: 'Overview',
++            component: ServerConsole,
++            exact: true,
++        },
++        {
++            path: '/console',
++            permission: null,
+             name: 'Console',
+             component: ServerConsole,
+             exact: true,
+diff --git a/resources/scripts/state/settings.ts b/resources/scripts/state/settings.ts
+index 20dbbdc..0798ceb 100644
+--- a/resources/scripts/state/settings.ts
++++ b/resources/scripts/state/settings.ts
+@@ -1,5 +1,74 @@
+ import { action, Action } from 'easy-peasy';
+ 
++export interface ThemeSettings {
++    version: string;
++    themeName: string;
++    brandName: string;
++    brandDescription: string;
++    assets: {
++        logo: string;
++        favicon: string;
++        site_icon?: string;
++    };
++    login: {
++        logo: string;
++        title: string;
++        description: string;
++        background: string;
++        background_effects: boolean;
++        accent_color: string;
++        card_style: 'elevated' | 'minimal' | 'glass';
++        illustration: string;
++    };
++    colors: {
++        primary: string;
++        secondary: string;
++        accent: string;
++        background: string;
++        surface: string;
++        card: string;
++        text: string;
++        muted_text: string;
++        border: string;
++    };
++    radius: number;
++    shadowIntensity: 'none' | 'soft' | 'medium' | 'strong';
++    appearance: {
++        default_mode: 'light' | 'dark' | 'system';
++        allow_user_theme: boolean;
++        sidebar_style: 'solid' | 'floating' | 'glass';
++        sidebar_width: 'compact' | 'normal' | 'wide';
++        sidebar_collapse: boolean;
++        compact_mode: boolean;
++        dense_mode: boolean;
++        card_layout: 'grid' | 'comfortable' | 'compact';
++    };
++    animation: {
++        enabled: boolean;
++        intensity: 'subtle' | 'medium' | 'high';
++        page_transitions: boolean;
++        hover_effects: boolean;
++        button_effects: boolean;
++        modal_animations: boolean;
++        background_effects: boolean;
++        loading_animations: boolean;
++    };
++    pixel: {
++        enabled: boolean;
++        intensity: number;
++        decorations: boolean;
++        icons: boolean;
++    };
++    typography: {
++        font_family: string;
++        font_size: number;
++        heading_scale: number;
++        font_weight: number;
++        line_height: number;
++    };
++    preset: string;
++}
++
+ export interface SiteSettings {
+     name: string;
+     locale: string;
+@@ -7,6 +76,7 @@ export interface SiteSettings {
+         enabled: boolean;
+         siteKey: string;
+     };
++    theme: ThemeSettings;
+ }
+ 
+ export interface SettingsStore {
+diff --git a/resources/views/admin/index.blade.php b/resources/views/admin/index.blade.php
+index 9652532..8d1e64f 100644
+--- a/resources/views/admin/index.blade.php
++++ b/resources/views/admin/index.blade.php
+@@ -5,49 +5,86 @@
+ @endsection
+ 
+ @section('content-header')
+-    <h1>Administrative Overview<small>A quick glance at your system.</small></h1>
++    <h1>Administrative Overview<small>Operational status and capacity snapshot.</small></h1>
+     <ol class="breadcrumb">
+         <li><a href="{{ route('admin.index') }}">Admin</a></li>
+-        <li class="active">Index</li>
++        <li class="active">Overview</li>
+     </ol>
+ @endsection
+ 
+ @section('content')
+-<div class="row">
+-    <div class="col-xs-12">
+-        <div class="box
+-            @if($version->isLatestPanel())
+-                box-success
+-            @else
+-                box-danger
+-            @endif
+-        ">
+-            <div class="box-header with-border">
+-                <h3 class="box-title">System Information</h3>
++    <div class="row orbit-stat-grid">
++        <div class="col-xs-6 col-md-3">
++            <div class="small-box orbit-admin-stat">
++                <div class="inner">
++                    <p>Users</p>
++                    <h3>{{ number_format($stats['users']) }}</h3>
++                </div>
++                <div class="icon"><i class="fa fa-users"></i></div>
+             </div>
+-            <div class="box-body">
+-                @if ($version->isLatestPanel())
+-                    You are running Pterodactyl Panel version <code>{{ config('app.version') }}</code>. Your panel is up-to-date!
+-                @else
+-                    Your panel is <strong>not up-to-date!</strong> The latest version is <a href="https://github.com/Pterodactyl/Panel/releases/v{{ $version->getPanel() }}" target="_blank"><code>{{ $version->getPanel() }}</code></a> and you are currently running version <code>{{ config('app.version') }}</code>. You can find instructions on how to update your panel <a href="https://pterodactyl.io/panel/1.0/updating.html">here</a>.
+-                @endif
++        </div>
++        <div class="col-xs-6 col-md-3">
++            <div class="small-box orbit-admin-stat">
++                <div class="inner">
++                    <p>Servers</p>
++                    <h3>{{ number_format($stats['servers']) }}</h3>
++                </div>
++                <div class="icon"><i class="fa fa-server"></i></div>
++            </div>
++        </div>
++        <div class="col-xs-6 col-md-3">
++            <div class="small-box orbit-admin-stat">
++                <div class="inner">
++                    <p>Nodes</p>
++                    <h3>{{ number_format($stats['nodes']) }}</h3>
++                </div>
++                <div class="icon"><i class="fa fa-sitemap"></i></div>
++            </div>
++        </div>
++        <div class="col-xs-6 col-md-3">
++            <div class="small-box orbit-admin-stat">
++                <div class="inner">
++                    <p>Locations</p>
++                    <h3>{{ number_format($stats['locations']) }}</h3>
++                </div>
++                <div class="icon"><i class="fa fa-globe"></i></div>
+             </div>
+         </div>
+     </div>
+-</div>
+-<div class="row">
+-    <div class="col-xs-6 col-sm-3 text-center">
+-        <a href="{{ $version->getDiscord() }}"><button class="btn btn-warning" style="width:100%;"><i class="fa fa-fw fa-support"></i> Get Help <small>(via Discord)</small></button></a>
+-    </div>
+-    <div class="col-xs-6 col-sm-3 text-center">
+-        <a href="https://pterodactyl.io"><button class="btn btn-primary" style="width:100%;"><i class="fa fa-fw fa-link"></i> Documentation</button></a>
+-    </div>
+-    <div class="clearfix visible-xs-block">&nbsp;</div>
+-    <div class="col-xs-6 col-sm-3 text-center">
+-        <a href="https://github.com/pterodactyl/panel"><button class="btn btn-primary" style="width:100%;"><i class="fa fa-fw fa-support"></i> GitHub</button></a>
+-    </div>
+-    <div class="col-xs-6 col-sm-3 text-center">
+-        <a href="{{ $version->getDonations() }}"><button class="btn btn-success" style="width:100%;"><i class="fa fa-fw fa-money"></i> Support the Project</button></a>
++
++    <div class="row">
++        <div class="col-xs-12 col-md-8">
++            <div class="box">
++                <div class="box-header with-border">
++                    <h3 class="box-title">System Information</h3>
++                </div>
++                <div class="box-body">
++                    @if ($version->isLatestPanel())
++                        <p class="text-success">
++                            Panel version <code>{{ config('app.version') }}</code> is up-to-date.
++                        </p>
++                    @else
++                        <p class="text-danger">
++                            Panel update available. Latest version is
++                            <a href="https://github.com/Pterodactyl/Panel/releases/v{{ $version->getPanel() }}" target="_blank"><code>{{ $version->getPanel() }}</code></a>
++                            while this panel runs <code>{{ config('app.version') }}</code>.
++                        </p>
++                    @endif
++                    <p class="m-b-0">Suspended servers: <strong>{{ number_format($stats['suspended_servers']) }}</strong></p>
++                </div>
++            </div>
++        </div>
++        <div class="col-xs-12 col-md-4">
++            <div class="box">
++                <div class="box-header with-border">
++                    <h3 class="box-title">Quick Links</h3>
++                </div>
++                <div class="box-body">
++                    <p><a href="{{ route('admin.settings.theme') }}" class="btn btn-primary btn-block">Theme Settings</a></p>
++                    <p><a href="{{ route('admin.servers') }}" class="btn btn-default btn-block">Manage Servers</a></p>
++                    <p><a href="{{ route('admin.nodes') }}" class="btn btn-default btn-block">Manage Nodes</a></p>
++                </div>
++            </div>
++        </div>
+     </div>
+-</div>
+ @endsection
+diff --git a/resources/views/layouts/admin.blade.php b/resources/views/layouts/admin.blade.php
+index 20ca084..38527da 100644
+--- a/resources/views/layouts/admin.blade.php
++++ b/resources/views/layouts/admin.blade.php
+@@ -3,18 +3,21 @@
+     <head>
+         <meta charset="utf-8">
+         <meta http-equiv="X-UA-Compatible" content="IE=edge">
+-        <title>{{ config('app.name', 'Pterodactyl') }} - @yield('title')</title>
++        <title>{{ data_get($panelTheme ?? [], 'brand_name', config('app.name', 'Pterodactyl')) }} - @yield('title')</title>
+         <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+         <meta name="_token" content="{{ csrf_token() }}">
+ 
+         <link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png">
+-        <link rel="icon" type="image/png" href="/favicons/favicon-32x32.png" sizes="32x32">
++        <link rel="icon" type="image/png" href="{{ data_get($panelTheme ?? [], 'assets.favicon', '/favicons/favicon-32x32.png') ?: '/favicons/favicon-32x32.png' }}" sizes="32x32">
+         <link rel="icon" type="image/png" href="/favicons/favicon-16x16.png" sizes="16x16">
+         <link rel="manifest" href="/favicons/manifest.json">
+         <link rel="mask-icon" href="/favicons/safari-pinned-tab.svg" color="#bc6e3c">
+         <link rel="shortcut icon" href="/favicons/favicon.ico">
+         <meta name="msapplication-config" content="/favicons/browserconfig.xml">
+-        <meta name="theme-color" content="#0e4688">
++        <meta name="theme-color" content="{{ data_get($panelTheme ?? [], 'colors.primary', '#0e4688') }}">
++        @if(!empty($panelThemeCssVariables))
++            <style>:root { {{ $panelThemeCssVariables }}; }</style>
++        @endif
+ 
+         @include('layouts.scripts')
+ 
+@@ -26,6 +29,7 @@
+             {!! Theme::css('vendor/sweetalert/sweetalert.min.css?t={cache-version}') !!}
+             {!! Theme::css('vendor/animate/animate.min.css?t={cache-version}') !!}
+             {!! Theme::css('css/pterodactyl.css?t={cache-version}') !!}
++            {!! Theme::css('css/orbit-theme.css?t={cache-version}') !!}
+             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/2.0.1/css/ionicons.min.css">
+ 
+@@ -35,7 +39,7 @@
+             <![endif]-->
+         @show
+     </head>
+-    <body class="hold-transition skin-blue fixed sidebar-mini">
++    <body class="hold-transition skin-blue fixed sidebar-mini orbit-admin mode-{{ data_get($panelTheme ?? [], 'appearance.default_mode', 'system') }} {{ data_get($panelTheme ?? [], 'appearance.sidebar_collapse') ? 'orbit-sidebar-collapsed' : '' }}">
+         <div class="wrapper">
+             <header class="main-header">
+                 <a href="{{ route('index') }}" class="logo">
+@@ -80,6 +84,11 @@
+                                 <i class="fa fa-wrench"></i> <span>Settings</span>
+                             </a>
+                         </li>
++                        <li class="{{ ! starts_with(Route::currentRouteName(), 'admin.settings.theme') ?: 'active' }}">
++                            <a href="{{ route('admin.settings.theme')}}">
++                                <i class="fa fa-paint-brush"></i> <span>Theme Settings</span>
++                            </a>
++                        </li>
+                         <li class="{{ ! starts_with(Route::currentRouteName(), 'admin.api') ?: 'active' }}">
+                             <a href="{{ route('admin.api.index')}}">
+                                 <i class="fa fa-gamepad"></i> <span>Application API</span>
+diff --git a/resources/views/partials/admin/settings/nav.blade.php b/resources/views/partials/admin/settings/nav.blade.php
+index 9f1ace7..ad4a9f1 100644
+--- a/resources/views/partials/admin/settings/nav.blade.php
++++ b/resources/views/partials/admin/settings/nav.blade.php
+@@ -9,6 +9,7 @@
+                     <li @if($activeTab === 'basic')class="active"@endif><a href="{{ route('admin.settings') }}">General</a></li>
+                     <li @if($activeTab === 'mail')class="active"@endif><a href="{{ route('admin.settings.mail') }}">Mail</a></li>
+                     <li @if($activeTab === 'advanced')class="active"@endif><a href="{{ route('admin.settings.advanced') }}">Advanced</a></li>
++                    <li @if($activeTab === 'theme')class="active"@endif><a href="{{ route('admin.settings.theme') }}">Theme</a></li>
+                 </ul>
+             </div>
+         </div>
+diff --git a/resources/views/templates/wrapper.blade.php b/resources/views/templates/wrapper.blade.php
+index a2d218a..c081ea1 100644
+--- a/resources/views/templates/wrapper.blade.php
++++ b/resources/views/templates/wrapper.blade.php
+@@ -1,7 +1,7 @@
+ <!DOCTYPE html>
+ <html>
+     <head>
+-        <title>{{ config('app.name', 'Pterodactyl') }}</title>
++        <title>{{ data_get($panelTheme ?? [], 'brand_name', config('app.name', 'Pterodactyl')) }}</title>
+ 
+         @section('meta')
+             <meta charset="utf-8">
+@@ -10,13 +10,16 @@
+             <meta name="csrf-token" content="{{ csrf_token() }}">
+             <meta name="robots" content="noindex">
+             <link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png">
+-            <link rel="icon" type="image/png" href="/favicons/favicon-32x32.png" sizes="32x32">
++            <link rel="icon" type="image/png" href="{{ data_get($panelTheme ?? [], 'assets.favicon', '/favicons/favicon-32x32.png') ?: '/favicons/favicon-32x32.png' }}" sizes="32x32">
+             <link rel="icon" type="image/png" href="/favicons/favicon-16x16.png" sizes="16x16">
+             <link rel="manifest" href="/favicons/manifest.json">
+             <link rel="mask-icon" href="/favicons/safari-pinned-tab.svg" color="#bc6e3c">
+             <link rel="shortcut icon" href="/favicons/favicon.ico">
+             <meta name="msapplication-config" content="/favicons/browserconfig.xml">
+-            <meta name="theme-color" content="#0e4688">
++            <meta name="theme-color" content="{{ data_get($panelTheme ?? [], 'colors.primary', '#0e4688') }}">
++            @if(!empty($panelThemeCssVariables))
++                <style>:root { {{ $panelThemeCssVariables }}; }</style>
++            @endif
+         @show
+ 
+         @section('user-data')
+diff --git a/routes/admin.php b/routes/admin.php
+index a1e102e..43e388c 100644
+--- a/routes/admin.php
++++ b/routes/admin.php
+@@ -68,12 +68,15 @@ Route::group(['prefix' => 'settings'], function () {
+     Route::get('/', [Admin\Settings\IndexController::class, 'index'])->name('admin.settings');
+     Route::get('/mail', [Admin\Settings\MailController::class, 'index'])->name('admin.settings.mail');
+     Route::get('/advanced', [Admin\Settings\AdvancedController::class, 'index'])->name('admin.settings.advanced');
++    Route::get('/theme', [Admin\Settings\ThemeController::class, 'index'])->name('admin.settings.theme');
+ 
+     Route::post('/mail/test', [Admin\Settings\MailController::class, 'test'])->name('admin.settings.mail.test');
+ 
+     Route::patch('/', [Admin\Settings\IndexController::class, 'update']);
+     Route::patch('/mail', [Admin\Settings\MailController::class, 'update']);
+     Route::patch('/advanced', [Admin\Settings\AdvancedController::class, 'update']);
++    Route::patch('/theme', [Admin\Settings\ThemeController::class, 'update'])->name('admin.settings.theme.update');
++    Route::delete('/theme', [Admin\Settings\ThemeController::class, 'reset'])->name('admin.settings.theme.reset');
+ });
+ 
+ /*
