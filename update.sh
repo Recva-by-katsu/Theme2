@@ -3,7 +3,8 @@
 # Aurora Theme for Pterodactyl Panel — updater (with rollback support).
 #
 # Usage:
-#   bash update.sh [--panel-dir PATH] [--ref main] [--force] [--skip-build] [--yes]
+#   bash update.sh [--panel-dir PATH] [--ref main] [--force] [--skip-build]
+#                  [--no-deps] [--yes]
 #   bash update.sh --rollback [--panel-dir PATH] [--backup DIR] [--yes]
 #
 # Updates by downloading the requested ref from GitHub (or using --local to use
@@ -38,6 +39,7 @@ ROLLBACK_BACKUP=""
 USE_LOCAL=""
 AURORA_FORCE="${AURORA_FORCE:-}"
 SKIP_BUILD="${AURORA_SKIP_BUILD:-}"
+AURORA_DEPS_MODE="${AURORA_DEPS_MODE:-auto}"
 ASSUME_YES=""
 AURORA_VERBOSE="${AURORA_VERBOSE:-}"
 
@@ -53,17 +55,28 @@ while [ $# -gt 0 ]; do
         --local) USE_LOCAL=1; shift ;;
         --force|-f) AURORA_FORCE=1; shift ;;
         --skip-build) SKIP_BUILD=1; shift ;;
+        --no-deps) AURORA_DEPS_MODE=off; shift ;;
         --yes|-y) ASSUME_YES=1; shift ;;
         --verbose|-v) AURORA_VERBOSE=1; shift ;;
         --help|-h)
             sed -n '2,20p' "$AURORA_SOURCE_DIR/update.sh"
+            echo ""
+            echo "Options:"
+            echo "  --ref REF          Branch/tag to update to (default: main)"
+            echo "  --rollback         Restore the newest (or --backup) backup"
+            echo "  --local            Update from this checkout instead of downloading"
+            echo "  --force            Bypass version/support checks"
+            echo "  --skip-build       Skip the frontend build"
+            echo "  --no-deps          Do NOT auto-install missing system dependencies"
+            echo "  --yes              Assume yes for prompts"
+            echo "  --verbose          Show full command output"
             exit 0
             ;;
         *) echo "[ERROR] Unknown option: $1 (see --help)"; exit 1 ;;
     esac
 done
 
-export AURORA_FORCE AURORA_VERBOSE
+export AURORA_FORCE AURORA_VERBOSE AURORA_DEPS_MODE
 
 # ---------------------------------------------------------------------------
 # Rollback mode: restore newest (or chosen) backup, rebuild, verify.
@@ -237,6 +250,7 @@ fi
 EXTRA_ARGS=(--panel-dir "$PANEL_DIR_RESOLVED")
 [ -n "$AURORA_FORCE" ] && EXTRA_ARGS+=(--force)
 [ -n "$SKIP_BUILD" ] && EXTRA_ARGS+=(--skip-build)
+[ "$AURORA_DEPS_MODE" = "off" ] && EXTRA_ARGS+=(--no-deps)
 [ -n "$ASSUME_YES" ] && EXTRA_ARGS+=(--yes)
 [ -n "$AURORA_VERBOSE" ] && EXTRA_ARGS+=(--verbose)
 

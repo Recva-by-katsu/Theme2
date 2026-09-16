@@ -123,11 +123,20 @@ themed purely through tokens/CSS.
 - `scripts/apply-patches.py` performs anchored, idempotent, marked insertions;
   `check` mode runs before anything is modified; `remove` restores patched
   files byte-identically (covered by automated check in CI/dev).
-- `install.sh`: preflight → backup (files + `public/assets` + mysqldump) →
-  maintenance → backend → patches → migrate → frontend/views/assets →
-  `yarn install` + `yarn build:production` → caches → ownership (755/644, no
-  777) → verify → version record. Pipe-safe (self-bootstraps from GitHub).
-  Failure trap attempts file rollback and always exits non-zero.
+- `scripts/deps.sh` is the smart dependency resolver: audit (OS + package
+  manager + per-tool status plan) → resolve (auto-install missing pieces via
+  apt/dnf/yum/zypper/pacman/apk, NodeSource for Node.js, corepack for yarn,
+  ondrej/sury PHP repos on legacy Debian/Ubuntu) → verify (fail only with
+  exact manual hints). Modes: `AURORA_DEPS_MODE=auto` (default) or `off`
+  (`--no-deps`, legacy strict checks); `AURORA_DEPS_DRY_RUN=1` audits without
+  touching the system. A live panel's PHP is never auto-replaced.
+- `install.sh`: preflight (incl. smart dependency resolution) → backup (files
+  + `public/assets` + mysqldump) → maintenance → backend → patches → migrate
+  → frontend/views/assets → `yarn install` + `yarn build:production` (with an
+  automatic OpenSSL-legacy-provider retry for pre-OpenSSL-3 webpack) → caches
+  → ownership (755/644, no 777) → verify → version record. Pipe-safe
+  (self-bootstraps from GitHub, auto-installing even the download tools when
+  needed). Failure trap attempts file rollback and always exits non-zero.
 - `update.sh`: version-aware upgrade from any ref + `--rollback` to any backup.
 - `uninstall.sh`: snapshot → remove theme → restore backup → optional
   `--remove-data` → rebuild stock → verify boot.

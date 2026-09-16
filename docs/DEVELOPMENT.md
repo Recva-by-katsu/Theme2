@@ -19,6 +19,10 @@ git clone --branch v1.14.1 --depth 1 https://github.com/pterodactyl/panel.git /t
 # Shell syntax
 bash -n install.sh uninstall.sh update.sh scripts/*.sh
 
+# Dependency resolver: dry-run audit (never installs anything)
+. scripts/lib.sh && . scripts/deps.sh
+AURORA_DEPS_DRY_RUN=1 PANEL_DIR_RESOLVED=/tmp/panel aurora_ensure_dependencies
+
 # Patch anchors + idempotency + byte-identical removal
 cp -r /tmp/panel /tmp/panel-test
 python3 scripts/apply-patches.py --panel-dir /tmp/panel-test --action check
