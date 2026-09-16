@@ -67,6 +67,14 @@ yarn build:production
 ```
 Then re-run the installer (it is idempotent and reuses backups).
 
+**``The `bg-blue-500/75` class does not exist`` during the build**
+Fixed in 1.2.1. The stock panel uses Tailwind opacity modifiers, and Aurora's
+`tailwind.config.js` must expose every remapped colour as a function so
+Tailwind can attach an alpha (see `withAlpha()` in
+`frontend/overrides/tailwind.config.js`). If you edit that file, keep new
+colour scales wrapped in `alphaScale()`; the smoke check in
+`docs/DEVELOPMENT.md` catches regressions without a full build.
+
 **`mysqldump not found`**
 The installer auto-installs the DB client (unless `--no-deps`); if it was
 skipped or failed, install it manually (`mariadb-client`/`mysql-client`) for

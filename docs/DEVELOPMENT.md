@@ -45,6 +45,19 @@ Full type-check + build must run inside a panel checkout with dependencies:
 cd /path/to/panel && yarn install && yarn tsc && yarn build:production
 ```
 
+Tailwind smoke check (fast, needs only the panel's `node_modules`): the stock
+panel relies on opacity modifiers, so every remapped colour must accept an
+alpha or `@apply` in the stock `*.module.css` files breaks the build.
+
+```bash
+cp frontend/overrides/tailwind.config.js /tmp/panel/tailwind.config.js
+cd /tmp/panel && node -e "
+const postcss = require('postcss');
+postcss([require('tailwindcss/nesting')(require('postcss-nesting')), require('tailwindcss')])
+  .process('.x{ @apply bg-blue-500/75 text-primary-500/50 bg-gray-900/50 bg-neutral-600/95 bg-red-500/25 bg-yellow-500/25 ring-primary-500 ring-opacity-50; }', { from: undefined })
+  .then(r => console.log(r.css)).catch(e => { console.error(e.message); process.exit(1); })"
+```
+
 ## Conventions
 
 - **Tokens, not hex codes.** Any user-visible color/spacing/radius/shadow must

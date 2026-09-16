@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.1 — 2026-09-16
+
+Fixes the frontend build failing on every install (1.14.x and 1.15.x) and
+the resulting rollback.
+
+- **Fix `yarn build:production` error** ``The `bg-blue-500/75` class does not
+  exist`` (and `text-primary-500/50`). The stock panel uses Tailwind opacity
+  modifiers (`bg-blue-500/75`, `bg-gray-900/50`, `ring-opacity-50`, …) which
+  Tailwind 3 can only generate when a colour can take an alpha channel. The
+  Aurora `tailwind.config.js` remaps colours to `var(--aurora-*)` /
+  `color-mix()` strings, which Tailwind cannot parse, so those utilities were
+  silently dropped and `@apply` in `button/style.module.css` and
+  `inputs/styles.module.css` failed. Every remapped colour step is now a
+  Tailwind colour function that layers the requested alpha with a second
+  `color-mix(... , transparent)`, so `bg-blue-500/75`, `*-opacity-*` and
+  twin.macro `theme('colors.*')` all resolve while still following the
+  admin-configured palette in dark and light mode.
+
 ## 1.2.0 — 2026-09-16
 
 Smart installer: the installer now **detects and auto-installs** every system
